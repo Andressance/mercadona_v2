@@ -54,12 +54,43 @@ firebase deploy --only hosting
 - Registro/Login con Email/Password.
 - Listas compartidas en Firestore y enlaces de invitación (`/invitar/:listId`).
 - Sugerencias basadas en “Siempre compro”, básicos y temporada.
+- Entrada de productos con autocompletado contra un catálogo en Firestore.
 
 ## Estructura
 - `src/modules/auth/*`: contexto y estado de autenticación.
 - `src/modules/cart/*`: estado del carrito (local/online).
 - `src/services/*`: Firebase, Firestore y sugerencias.
 - `src/pages/*`: páginas de la app.
+
+## Catálogo de productos (nuevo)
+Para que el input del carrito acepte solo productos válidos, crea una colección `products` en Firestore con documentos que tengan al menos el campo `name` (opcional: `category`, `price`, etc.). Ejemplo:
+
+```
+// Collection: products
+{ "name": "Leche desnatada Hacendado", "category": "Lácteos" }
+{ "name": "Arroz redondo Hacendado", "category": "Despensa" }
+{ "name": "Pan de molde", "category": "Panadería" }
+```
+
+Reglas mínimas (solo lectura para usuarios autenticados) — ajusta según tus necesidades:
+
+```
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /products/{productId} {
+      allow read: if request.auth != null; // permitir lectura a usuarios autenticados
+      allow write: if false;               // bloquear escritura desde cliente
+    }
+    match /lists/{listId} {
+      allow read: if request.auth != null && request.auth.uid in resource.data.memberIds;
+      allow write: if request.auth != null && request.auth.uid in resource.data.memberIds;
+    }
+  }
+}
+```
+
+La búsqueda usa prefijo sobre el campo `name` (`orderBy('name')`, `startAt`, `endAt`). Para grandes catálogos, considera integrar Algolia o similares.
 
 ## Notas
 - Para colaboración en tiempo real, usa sesión (modo online). En modo invitado, las funciones de listas compartidas están deshabilitadas.

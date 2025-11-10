@@ -1,4 +1,4 @@
-import { NavLink, useLocation } from 'react-router-dom';
+import { NavLink, useLocation, useNavigate } from 'react-router-dom'; // 1. useNavigate AÑADIDO
 import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '../modules/auth/AuthContext.jsx';
 
@@ -7,6 +7,7 @@ export default function NavBar() {
   const location = useLocation();
   const navRef = useRef(null);
   const [indicatorStyle, setIndicatorStyle] = useState({ width: 0, x: 0 });
+  const navigate = useNavigate(); // 2. Hook de navegación
 
   const updateIndicator = () => {
     const navEl = navRef.current;
@@ -29,9 +30,15 @@ export default function NavBar() {
     window.addEventListener('resize', updateIndicator);
     return () => window.removeEventListener('resize', updateIndicator);
   }, []);
+
+  // Función para manejar el clic en "Invitado"
+  const onGuestAccess = () => {
+    useLocalMode(); // 1. Establece el modo invitado
+    navigate('/carrito'); // 2. Redirige al carrito
+  };
+
   return (
     <nav className="nav" ref={navRef}>
-      {/* Logo a la izquierda del botón Inicio */}
       <img src="/logo.jpg" alt="Logo Mercart" className="logo" />
       <NavLink to="/" className={({ isActive }) => (isActive ? 'active' : undefined)}>Inicio</NavLink>
       <NavLink to="/carrito" className={({ isActive }) => (isActive ? 'active' : undefined)}>Carrito</NavLink>
@@ -45,12 +52,19 @@ export default function NavBar() {
         }}
       />
       <div className="nav-right">
+        {/* Muestra estado (invitado o email) */}
         {mode === 'local' ? (
-          <button className="btn secondary" onClick={() => useLocalMode()}>Invitado</button>
+          <button className="btn secondary" onClick={onGuestAccess}>Invitado</button>
         ) : (
           <span className="badge">{user?.email || 'Usuario'}</span>
         )}
-        <NavLink to="/auth" className={({ isActive }) => (isActive ? 'active' : undefined)}>Acceso</NavLink>
+
+        {/* El enlace a '/login' solo se muestra si NO hay usuario */}
+        {!user && (
+          <NavLink to="/login" className={({ isActive }) => (isActive ? 'active' : undefined)}>Acceso</NavLink>
+        )}
+        
+        {/* El botón 'Salir' solo se muestra si SÍ hay usuario */}
         {user && (
           <button className="btn secondary" onClick={logout}>Salir</button>
         )}

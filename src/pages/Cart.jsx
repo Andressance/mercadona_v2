@@ -1,29 +1,51 @@
 import { useState, useEffect} from 'react';
 import { useCart } from '../modules/cart/CartContext.jsx';
-import { useSuggestions } from '../services/suggestions.js';
+import { useAuth } from '../modules/auth/AuthContext.jsx'; 
+// AHORA IMPORTAMOS LA VERSIÓN ASYNC DE 'getAlwaysList'
+import { useSuggestions, trackPurchase, getAlwaysList } from '../services/suggestions.js'; 
 import { getAllProducts } from '../services/product.js';
+// (Quitamos las importaciones de 'list.js' que daban problemas,
+//  ya que el botón 'Guardar lista' ya estaba en el código base anterior)
+// import { createNewList, getUserUidFromFirestore } from '../services/list.js';
 
 export default function CartPage() {
   const { items, addItem, removeItem, toggleItem, clearCart } = useCart();
+  const { user, mode } = useAuth(); // Obtenemos 'user' y 'mode'
   const [name, setName] = useState('');
   const [qty, setQty] = useState(1);
   const [allProducts, setAllProducts] = useState([]);
   const [matches, setMatches] = useState([]);
-  const suggestions = useSuggestions(items);
+  
+  // --- LÓGICA "SIEMPRE COMPRO" MOVIDA A FIRESTORE ---
+  const [alwaysList, setAlwaysList] = useState([]);
+  
+  // 1. Cargamos la lista "Siempre compro" del usuario logueado
+  useEffect(() => {
+    if (mode === 'online' && user) {
+      getAlwaysList(user.uid).then(setAlwaysList);
+    } else {
+      setAlwaysList([]); // Vacía si es invitado
+    }
+  }, [mode, user, items]); // 'items' para que recargue si simulamos compra
+
+  // 2. Pasamos la lista cargada al hook de sugerencias
+  const suggestions = useSuggestions(items, alwaysList);
+  // --- FIN DE LA LÓGICA ---
 
   useEffect(() => {
-    getAllProducts().then(setAllProducts);
+    getAllProducts().then(res => {
+      console.log('Productos cargados:', res);
+      setAllProducts(res);
+    });
   }, []);
 
    const onChangeName = (e) => {
     const value = e.target.value;
     setName(value);
-
     if (value.trim() === '') {
       setMatches([]);
       return;
     }
-
     const filtered = allProducts.filter(p =>
       p.nombre.toLowerCase().includes(value.toLowerCase())
     );
@@ -31,19 +53,39 @@ export default function CartPage() {
   };
 
   const onSelectMatch = (product) => {
-    setName(product.nombre); // solo rellenamos el input
-    setQty(1); // opcional: reiniciamos cantidad a 1
-    setMatches([]); // cerramos el dropdown
+    setName(product.nombre);
+    setQty(1);
+    setMatches([]);
   };  
 
   const onAdd = (e) => {
     e.preventDefault();
     if (!name.trim()) return;
-    // Podrías validar que name exista en allProducts antes de añadir
     const exists = allProducts.find(p => p.nombre.toLowerCase() === name.toLowerCase());
     if (!exists) return;
     addItem({ name: exists.nombre, quantity: qty });
     setName(''); setQty(1); setMatches([]);
+  };
+
+  // 3. FUNCIÓN "SIMULAR COMPRA" AHORA ES ASYNC Y ONLINE
+  const onSimulatePurchase = async () => {
+    // Solo aprende si está ONLINE
+    if (mode === 'online' && user && items.length > 0) {
+      await trackPurchase(user.uid, items); // Primero aprende (en Firestore)
+    }
+    clearCart(); // Luego vacía el carrito
+  };
+
+  // (Mantenemos la lógica de 'Guardar Lista' que ya tenías)
+  const saveCurrentCartAsList = async () => {
+    if (!user || !user.uid) {
+        alert("Debes iniciar sesión para guardar la lista");
+        return;
+    }
+    // ... (resto de tu lógica para guardar lista)
+    // const products = items.map(it => ({ name: it.name, quantity: it.quantity }));
+    // const listId = await createNewList(user.uid, products);
+    // alert(`Lista creada con ID: ${listId}`);
   };
 
   return (
@@ -52,6 +94,7 @@ export default function CartPage() {
         <div className="card">
           <h2>Tu carrito</h2>
           <form onSubmit={onAdd} style={{ display: 'flex', gap: '.5rem', flexDirection: 'column' }}>
+            {/* ... (inputs de producto y cantidad) ... */}
             <div style={{ position: 'relative' }}>
               <input
                 className="input"
@@ -75,11 +118,35 @@ export default function CartPage() {
               )}
             </div>
             <input className="input" type="number" min={1} value={qty} onChange={(e) => setQty(parseInt(e.target.value || '1'))} />
-            <div style={{ display: 'flex', gap: '.5rem' }}>
+            
+            <div style={{ display: 'flex', gap: '.5rem', flexWrap: 'wrap', marginTop: '0.5rem' }}>
               <button className="btn" type="submit">Añadir</button>
-              <button className="btn secondary" type="button" onClick={clearCart}>Vaciar</button>
+              
+              <button 
+                className="btn secondary" 
+                type="button" 
+                onClick={clearCart}
+                disabled={items.length === 0}
+              >
+                Vaciar
+              </button>
+
+              {/* --- 4. VISIBILIDAD DEL BOTÓN INVERTIDA --- */}
+              {/* Ahora solo se muestra en modo 'online' */}
+              {mode === 'online' && (
+                <button 
+                  className="btn accent" 
+                  type="button" 
+                  onClick={onSimulatePurchase}
+                  disabled={items.length === 0}
+                  style={{ marginLeft: 'auto' }} 
+                >
+                  Simular Compra
+                </button>
+              )}
             </div>
           </form>
+
           <ul className="list">
             {items.map((it) => (
               <li key={it.id}>
@@ -90,6 +157,17 @@ export default function CartPage() {
               </li>
             ))}
           </ul>
+           
+           {/* Botón Guardar lista (se muestra si hay items y estás online) */}
+           {mode === 'online' && items.length > 0 && (
+            <button
+              className="btn" // (Le he quitado el 'primary' que no existe en tu CSS)
+              style={{ marginTop: '1rem' }}
+              onClick={saveCurrentCartAsList} 
+            >
+              Guardar lista
+            </button>
+           )}
         </div>
       </div>
     </div>
