@@ -1,10 +1,10 @@
 import { useState, useEffect} from 'react';
 import { useCart } from '../modules/cart/CartContext.jsx';
-import { useAuth } from '../modules/auth/AuthContext.jsx'; // 1. IMPORTAR useAuth
+import { useAuth } from '../modules/auth/AuthContext.jsx'; 
 import { useSuggestions } from '../services/suggestions.js';
-import { trackPurchase } from '../services/suggestions.js'; // 2. IMPORTAR trackPurchase
+import { trackPurchase } from '../services/suggestions.js'; 
 import { getAllProducts } from '../services/product.js';
-import { createNewList } from '../services/list.js';
+import { createNewList, getUserUidFromFirestore } from '../services/list.js';
 
 export default function CartPage() {
   const { items, addItem, removeItem, toggleItem, clearCart } = useCart();
@@ -63,29 +63,21 @@ export default function CartPage() {
   const { user } = useAuth(); // user.uid viene de Firebase Auth
 
 const saveCurrentCartAsList = async () => {
-  if (!user || !user.uid) {
-    alert("Debes iniciar sesión para guardar la lista");
-    console.log("DEBUG: user o user.uid es null", user);
-    return;
-  }
+  if (!user || !user.uid) return;
 
-  if (items.length === 0) {
-    alert("Tu carrito está vacío");
-    console.log("DEBUG: carrito vacío");
+  let ownerUid;
+  try {
+    ownerUid = await getUserUidFromFirestore(user.uid);
+  } catch (err) {
+    console.error(err);
+    alert("No se pudo obtener el UID del usuario");
     return;
   }
 
   const products = items.map(it => ({ name: it.name, quantity: it.quantity }));
 
-  try {
-    const listId = await createNewList(user.uid, products);
-    alert(`✅ Lista creada con ID: ${listId}`);
-    console.log("Lista creada con ID:", listId);
-  } catch (err) {
-    // Aquí vemos el error real de Firebase
-    console.error("Error real creando la lista:", err);
-    alert(`❌ Error al crear la lista: ${err.message}`);
-  }
+  const listId = await createNewList(ownerUid, products);
+  alert(`Lista creada con ID: ${listId}`);
 };
 
   return (
