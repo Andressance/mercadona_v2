@@ -1,6 +1,6 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
 import NavBar from './components/NavBar.jsx';
-import Home from './pages/Home.jsx';
+import WelcomePage from './pages/Welcome.jsx';
 import AuthPage from './pages/Auth.jsx';
 import CartPage from './pages/Cart.jsx';
 import AlwaysBuyPage from './pages/AlwaysBuy.jsx';
@@ -15,7 +15,7 @@ export default function App() {
       <NavBar />
       <main className="container">
         <Routes>
-          <Route path="/" element={<Home />} />
+          <Route path="/" element={<WelcomePage />} />
           <Route path="/auth" element={<AuthPage />} />
           <Route path="/carrito" element={<CartPage />} />
           <Route path="/siempre" element={<AlwaysBuyPage />} />
