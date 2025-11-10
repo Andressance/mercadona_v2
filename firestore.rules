@@ -6,23 +6,22 @@ service cloud.firestore {
     match /lists/{listId} {
 
       // --- LECTURA (READ) ---
-      // Separamos 'list' (consultas) de 'get' (documento individual)
       
       // Permite consultas (list) si el usuario está autenticado.
-      // Las consultas DEBEN estar aseguradas en tu código
-      // (como ya haces con 'memberIds' y 'ownerId')
       allow list: if request.auth != null;
-      // Permite obtener un documento (get) si el usuario es miembro
-      allow get: if request.auth != null && request.auth.uid in resource.data.memberIds;
+
+      // --- ¡LÍNEA MODIFICADA AQUÍ! ---
+      // Permite obtener (get) un documento si estás autenticado.
+      // Esto es necesario para que un usuario pueda "unirse" (leer el doc para luego actualizarlo).
+      allow get: if request.auth != null;
+      // --- FIN DE LA MODIFICACIÓN ---
+
       // --- ESCRITURA (WRITE) ---
-      // Separamos 'create', 'update', 'delete'
 
       // Permite CREAR una lista si eres el propietario
       allow create: if request.auth != null && 
                      request.auth.uid == request.resource.data.ownerId;
-      // Permite ACTUALIZAR si:
-      // 1. Ya eres miembro (para añadir/quitar/marcar productos)
-      // 2. O te estás añadiendo a ti mismo a la lista (para unirte)
+      // Permite ACTUALIZAR si eres miembro O si te estás añadiendo
       allow update: if request.auth != null && (
         request.auth.uid in resource.data.memberIds ||
         request.auth.uid in request.resource.data.memberIds
@@ -32,13 +31,33 @@ service cloud.firestore {
                      request.auth.uid == resource.data.ownerId;
     }
 
-    // --- NUEVA REGLA ---
-    // Reglas para la colección 'users'
+    // Reglas para la colección 'users' (Sin cambios)
     match /users/{userId} {
       // Un usuario solo puede crear, leer o actualizar SU PROPIO documento de perfil.
-      // No permitimos 'list' (para que un usuario no pueda listar a todos los demás)
-      // No permitimos 'delete' (opcional, puedes añadirlo si quieres)
       allow create, get, update: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // --- ¡REGLA AÑADIDA (1/3)! ---
+    // Reglas para los hábitos del usuario (la lista "Siempre Compro")
+    match /userHabits/{userId} {
+      // Un usuario solo puede leer y escribir (crear/actualizar) 
+      // SU PROPIO documento de hábitos.
+      allow get, create, update: if request.auth != null && request.auth.uid == userId;
+    }
+    
+    // --- ¡REGLA AÑADIDA (2/3)! ---
+    // Regla para el catálogo de productos
+    match /producto/{prodId} {
+      allow read: if request.auth != null; // Permite leer a usuarios logueados
+      allow write: if false; // Nadie puede escribir desde el cliente
+    }
+    
+    // --- ¡REGLA AÑADIDA (3/3)! ---
+    // Regla para la colección "Lista" (usada en list.js)
+    match /Lista/{listId} {
+      allow create: if request.auth != null && request.auth.uid == request.resource.data.ownerId;
+      allow get, list: if request.auth != null && request.auth.uid == resource.data.ownerId;
+      allow update, delete: if request.auth != null && request.auth.uid == resource.data.ownerId;
     }
   }
 }
