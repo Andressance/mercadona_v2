@@ -1,5 +1,6 @@
 import { db } from './firebase.js';
-import { collection, addDoc, doc, getDoc, getDocs, onSnapshot, query, where, updateDoc } from 'firebase/firestore';
+// 1. AÑADIR 'setDoc' y 'doc' A LA IMPORTACIÓN
+import { collection, addDoc, doc, getDoc, getDocs, onSnapshot, query, where, updateDoc, setDoc } from 'firebase/firestore';
 
 const listsCol = collection(db, 'lists');
 
@@ -9,7 +10,6 @@ export async function createList({ name, ownerId }) {
 }
 
 export async function ensureDefaultList(userId) {
-  // Leer listas donde el usuario ya es miembro (alineado con reglas)
   const q = query(listsCol, where('memberIds', 'array-contains', userId));
   const snap = await getDocs(q);
   if (!snap.empty) return snap.docs[0].id;
@@ -65,4 +65,35 @@ export async function joinListById(listId, userId) {
   if (!memberIds.includes(userId)) {
     await updateDoc(ref, { memberIds: [...memberIds, userId] });
   }
+}
+
+// --- 2. ¡AÑADIR ESTAS NUEVAS FUNCIONES PARA HÁBITOS! ---
+
+const getHabitRef = (userId) => doc(db, 'userHabits', userId);
+
+/**
+ * Obtiene el historial de hábitos de un usuario desde Firestore
+ * @param {string} userId
+ * @returns {Promise<Object>} El objeto de historial (o {} si es nuevo)
+ */
+export async function getHabitHistory(userId) {
+  if (!userId) return {};
+  const ref = getHabitRef(userId);
+  const snap = await getDoc(ref);
+  if (snap.exists()) {
+    return snap.data().history || {};
+  }
+  return {};
+}
+
+/**
+ * Guarda el historial de hábitos de un usuario en Firestore
+ * @param {string} userId
+ * @param {Object} history El objeto de historial actualizado
+ */
+export async function saveHabitHistory(userId, history) {
+  if (!userId) return;
+  const ref = getHabitRef(userId);
+  // Usamos setDoc para crear/sobrescribir el documento con el nuevo historial
+  await setDoc(ref, { history });
 }
