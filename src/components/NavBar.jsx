@@ -41,6 +41,7 @@ export default function NavBar() {
 
   return (
     <nav className="nav" ref={navRef}>
+
       <img src="/logo.jpg" alt="Logo Mercart" className="logo" />
       <NavLink to="/" className={({ isActive }) => (isActive ? 'active' : undefined)}>Inicio</NavLink>
       <NavLink to="/carrito" className={({ isActive }) => (isActive ? 'active' : undefined)}>Carrito</NavLink>
