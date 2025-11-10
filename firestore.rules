@@ -12,17 +12,14 @@ service cloud.firestore {
       // Las consultas DEBEN estar aseguradas en tu código
       // (como ya haces con 'memberIds' y 'ownerId')
       allow list: if request.auth != null;
-      
       // Permite obtener un documento (get) si el usuario es miembro
       allow get: if request.auth != null && request.auth.uid in resource.data.memberIds;
-
       // --- ESCRITURA (WRITE) ---
       // Separamos 'create', 'update', 'delete'
 
       // Permite CREAR una lista si eres el propietario
       allow create: if request.auth != null && 
                      request.auth.uid == request.resource.data.ownerId;
-
       // Permite ACTUALIZAR si:
       // 1. Ya eres miembro (para añadir/quitar/marcar productos)
       // 2. O te estás añadiendo a ti mismo a la lista (para unirte)
@@ -30,10 +27,18 @@ service cloud.firestore {
         request.auth.uid in resource.data.memberIds ||
         request.auth.uid in request.resource.data.memberIds
       );
-      
       // Permite BORRAR solo si eres el propietario
       allow delete: if request.auth != null && 
                      request.auth.uid == resource.data.ownerId;
+    }
+
+    // --- NUEVA REGLA ---
+    // Reglas para la colección 'users'
+    match /users/{userId} {
+      // Un usuario solo puede crear, leer o actualizar SU PROPIO documento de perfil.
+      // No permitimos 'list' (para que un usuario no pueda listar a todos los demás)
+      // No permitimos 'delete' (opcional, puedes añadirlo si quieres)
+      allow create, get, update: if request.auth != null && request.auth.uid == userId;
     }
   }
 }
