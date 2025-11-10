@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '../modules/auth/AuthContext.jsx';
-import { createList, getListsForUser } from '../services/firestore.js';
+import { createList, getListsForUser} from '../services/firestore.js';
 import { jsPDF } from "jspdf";
+import { sendInvitation, getInvitationsForUser, acceptInvitation, rejectInvitation } from '../services/invitations'; 
 
 export default function SharedListsPage() {
   const { user, mode } = useAuth();
   const [lists, setLists] = useState([]);
+  const [invitedLists, setInvitedLists] = useState([]);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -13,8 +15,11 @@ export default function SharedListsPage() {
       if (mode === 'online' && user) {
         const res = await getListsForUser(user.uid);
         setLists(res);
+        const invites = await getInvitationsForUser(user.email);
+        setInvitedLists(invites);
       } else {
         setLists([]);
+        setInvitedLists([]);
       }
     };
     load();
@@ -66,24 +71,85 @@ export default function SharedListsPage() {
     doc.save('carrito.pdf');
   }
 
+
+  const inviteMembers = async () => {
+    if (!user) return alert('Inicia sesión para invitar');
+    const email = prompt('Correo del usuario a invitar');
+    if (!email) return;
+    try {
+      await sendInvitation(email, user.uid);
+      alert('Invitación enviada a ' + email);
+    } catch (e) {
+      alert('Error enviando invitación');
+      console.error(e);
+    }
+  };
+
+  const handleAcceptInvite = async (listId) => {
+    if (!user) return;
+    setLoading(true);
+    try {
+      await acceptInvitation(user.uid, listId);
+      const updatedLists = await getListsForUser(user.uid);
+      setLists(updatedLists);
+      const updatedInvites = await getInvitationsForUser(user.email);
+      setInvitedLists(updatedInvites);
+    } catch (e) {
+      alert('Error aceptando invitación');
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleRejectInvite = async (listId) => {
+    if (!user) return;
+    setLoading(true);
+    try {
+      await rejectInvitation(user.uid, listId);
+      const updatedInvites = await getInvitationsForUser(user.email);
+      setInvitedLists(updatedInvites);
+    } catch (e) {
+      alert('Error rechazando invitación');
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
-    <div className="card">
-      <h2>Listas compartidas</h2>
-      {mode === 'local' && <p className="muted">Para colaborar en tiempo real, inicia sesión.</p>}
-      <div style={{ display: 'flex', gap: '.5rem' }}>
-        <button className="btn" disabled={!user || loading} onClick={onCreate}>Crear lista</button>
+    <div>
+      <div className="card">
+        <h2>Listas compartidas</h2>
+        {mode === 'local' && <p className="muted">Para colaborar en tiempo real, inicia sesión.</p>}
+        <div style={{ display: 'flex', gap: '.5rem' }}>
+          <button className="btn" disabled={!user || loading} onClick={onCreate}>Crear lista</button>
+        </div>
+        <ul className="list" style={{ marginTop: '.5rem' }}>
+          {lists.map((l) => (
+            <li key={l.id}>
+              <span>{l.name}</span>
+              <span className="badge">miembros: {l.memberIds?.length || 1}</span>
+              <button className="btn secondary" onClick={() => showCart()}>Mostrar Carrito</button>
+              <button className="btn secondary" onClick={() => copyLink(l.id)}>Copiar enlace</button>
+              <button className="btn secondary" onClick={() => createPdf()}> Descargar lista</button>
+              <button className="btn secondary" onClick={() => inviteMembers()}> Invitar miembros</button>
+            </li>
+          ))}
+        </ul>
       </div>
-      <ul className="list" style={{ marginTop: '.5rem' }}>
-        {lists.map((l) => (
-          <li key={l.id}>
-            <span>{l.name}</span>
-            <span className="badge">miembros: {l.memberIds?.length || 1}</span>
-            <button className="btn secondary" onClick={() => showCart()}>Mostrar Carrito</button>
-            <button className="btn secondary" onClick={() => copyLink(l.id)}>Copiar enlace</button>
-            <button className="btn secondary" onClick={() => createPdf()}> Descargar lista</button>
-          </li>
-        ))}
-      </ul>
+      <div className="Invited">
+        <h2>Listas a las que has sido invitado</h2>
+        <ul className="list" style={{ marginTop: '.5rem' }}>
+          {invitedLists.map(invited => (
+            <li key={invited.id}>
+              <span>{invited.name}</span>
+              <button className="btn success" onClick={() => handleAcceptInvite(invited.id)}>✔️</button>
+              <button className="btn danger" onClick={() => handleRejectInvite(invited.id)}>❌</button>
+            </li>
+          ))}
+        </ul>
+      </div>
     </div>
   );
 }
