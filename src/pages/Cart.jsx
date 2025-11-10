@@ -6,7 +6,7 @@ import { useSuggestions, trackPurchase, getAlwaysList } from '../services/sugges
 import { getAllProducts } from '../services/product.js';
 // (Quitamos las importaciones de 'list.js' que daban problemas,
 //  ya que el botón 'Guardar lista' ya estaba en el código base anterior)
-// import { createNewList, getUserUidFromFirestore } from '../services/list.js';
+import { createNewList, getUserUidFromFirestore, generatePdf } from '../services/list.js';
 
 export default function CartPage() {
   const { items, addItem, removeItem, toggleItem, clearCart } = useCart();
@@ -78,15 +78,33 @@ export default function CartPage() {
 
   // (Mantenemos la lógica de 'Guardar Lista' que ya tenías)
   const saveCurrentCartAsList = async () => {
-    if (!user || !user.uid) {
-        alert("Debes iniciar sesión para guardar la lista");
-        return;
-    }
-    // ... (resto de tu lógica para guardar lista)
-    // const products = items.map(it => ({ name: it.name, quantity: it.quantity }));
-    // const listId = await createNewList(user.uid, products);
-    // alert(`Lista creada con ID: ${listId}`);
-  };
+  if (!user || !user.uid) {
+    alert("Debes iniciar sesión para guardar la lista");
+    return;
+  }
+
+  let ownerUid;
+  try {
+    ownerUid = await getUserUidFromFirestore(user.uid);
+  } catch (err) {
+    console.error(err);
+    alert("No se pudo obtener el UID del usuario");
+    return;
+  }
+
+  const products = items.map(it => ({ name: it.name, quantity: it.quantity }));
+
+  try {
+    const listId = await createNewList(ownerUid, products);
+    alert(`Lista creada con ID: ${listId}`);
+
+    // ✅ Genera PDF aquí mismo
+    generatePdf(products);
+  } catch (err) {
+    console.error(err);
+    alert("Error al crear la lista");
+  }
+};
 
   return (
     <div className="row">
