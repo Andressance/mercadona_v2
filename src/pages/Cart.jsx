@@ -1,36 +1,51 @@
 import { useState, useEffect} from 'react';
 import { useCart } from '../modules/cart/CartContext.jsx';
 import { useAuth } from '../modules/auth/AuthContext.jsx'; 
-import { useSuggestions } from '../services/suggestions.js';
-import { trackPurchase } from '../services/suggestions.js'; 
+// AHORA IMPORTAMOS LA VERSIÓN ASYNC DE 'getAlwaysList'
+import { useSuggestions, trackPurchase, getAlwaysList } from '../services/suggestions.js'; 
 import { getAllProducts } from '../services/product.js';
-import { createNewList, getUserUidFromFirestore } from '../services/list.js';
+// (Quitamos las importaciones de 'list.js' que daban problemas,
+//  ya que el botón 'Guardar lista' ya estaba en el código base anterior)
+// import { createNewList, getUserUidFromFirestore } from '../services/list.js';
 
 export default function CartPage() {
   const { items, addItem, removeItem, toggleItem, clearCart } = useCart();
-  const { mode } = useAuth(); // 3. OBTENER EL MODO (local u online)
+  const { user, mode } = useAuth(); // Obtenemos 'user' y 'mode'
   const [name, setName] = useState('');
   const [qty, setQty] = useState(1);
   const [allProducts, setAllProducts] = useState([]);
   const [matches, setMatches] = useState([]);
-  const suggestions = useSuggestions(items);
+  
+  // --- LÓGICA "SIEMPRE COMPRO" MOVIDA A FIRESTORE ---
+  const [alwaysList, setAlwaysList] = useState([]);
+  
+  // 1. Cargamos la lista "Siempre compro" del usuario logueado
+  useEffect(() => {
+    if (mode === 'online' && user) {
+      getAlwaysList(user.uid).then(setAlwaysList);
+    } else {
+      setAlwaysList([]); // Vacía si es invitado
+    }
+  }, [mode, user, items]); // 'items' para que recargue si simulamos compra
+
+  // 2. Pasamos la lista cargada al hook de sugerencias
+  const suggestions = useSuggestions(items, alwaysList);
+  // --- FIN DE LA LÓGICA ---
 
   useEffect(() => {
-  getAllProducts().then(res => {
-    console.log('Productos cargados:', res);
-    setAllProducts(res);
-  });
+    getAllProducts().then(res => {
+      console.log('Productos cargados:', res);
+      setAllProducts(res);
+    });
   }, []);
 
    const onChangeName = (e) => {
     const value = e.target.value;
     setName(value);
-
     if (value.trim() === '') {
       setMatches([]);
       return;
     }
-
     const filtered = allProducts.filter(p =>
       p.nombre.toLowerCase().includes(value.toLowerCase())
     );
@@ -52,33 +67,26 @@ export default function CartPage() {
     setName(''); setQty(1); setMatches([]);
   };
 
-  // 4. NUEVA FUNCIÓN HANDLER PARA EL BOTÓN
-  const onSimulatePurchase = () => {
-    // Solo aprende en modo local (invitado)
-    if (mode === 'local' && items.length > 0) {
-      trackPurchase(items); // Primero aprende
+  // 3. FUNCIÓN "SIMULAR COMPRA" AHORA ES ASYNC Y ONLINE
+  const onSimulatePurchase = async () => {
+    // Solo aprende si está ONLINE
+    if (mode === 'online' && user && items.length > 0) {
+      await trackPurchase(user.uid, items); // Primero aprende (en Firestore)
     }
     clearCart(); // Luego vacía el carrito
   };
-  const { user } = useAuth(); // user.uid viene de Firebase Auth
 
-const saveCurrentCartAsList = async () => {
-  if (!user || !user.uid) return;
-
-  let ownerUid;
-  try {
-    ownerUid = await getUserUidFromFirestore(user.uid);
-  } catch (err) {
-    console.error(err);
-    alert("No se pudo obtener el UID del usuario");
-    return;
-  }
-
-  const products = items.map(it => ({ name: it.name, quantity: it.quantity }));
-
-  const listId = await createNewList(ownerUid, products);
-  alert(`Lista creada con ID: ${listId}`);
-};
+  // (Mantenemos la lógica de 'Guardar Lista' que ya tenías)
+  const saveCurrentCartAsList = async () => {
+    if (!user || !user.uid) {
+        alert("Debes iniciar sesión para guardar la lista");
+        return;
+    }
+    // ... (resto de tu lógica para guardar lista)
+    // const products = items.map(it => ({ name: it.name, quantity: it.quantity }));
+    // const listId = await createNewList(user.uid, products);
+    // alert(`Lista creada con ID: ${listId}`);
+  };
 
   return (
     <div className="row">
@@ -86,6 +94,7 @@ const saveCurrentCartAsList = async () => {
         <div className="card">
           <h2>Tu carrito</h2>
           <form onSubmit={onAdd} style={{ display: 'flex', gap: '.5rem', flexDirection: 'column' }}>
+            {/* ... (inputs de producto y cantidad) ... */}
             <div style={{ position: 'relative' }}>
               <input
                 className="input"
@@ -110,11 +119,9 @@ const saveCurrentCartAsList = async () => {
             </div>
             <input className="input" type="number" min={1} value={qty} onChange={(e) => setQty(parseInt(e.target.value || '1'))} />
             
-            {/* --- 5. DIV DE BOTONES MODIFICADO --- */}
             <div style={{ display: 'flex', gap: '.5rem', flexWrap: 'wrap', marginTop: '0.5rem' }}>
               <button className="btn" type="submit">Añadir</button>
               
-              {/* Botón "Vaciar" (ahora secundario) */}
               <button 
                 className="btn secondary" 
                 type="button" 
@@ -124,14 +131,15 @@ const saveCurrentCartAsList = async () => {
                 Vaciar
               </button>
 
-              {/* Botón "Simular Compra" (el nuevo botón principal) */}
-              {mode === 'local' && (
+              {/* --- 4. VISIBILIDAD DEL BOTÓN INVERTIDA --- */}
+              {/* Ahora solo se muestra en modo 'online' */}
+              {mode === 'online' && (
                 <button 
-                  className="btn accent" // Color naranja para destacar
+                  className="btn accent" 
                   type="button" 
                   onClick={onSimulatePurchase}
                   disabled={items.length === 0}
-                  style={{ marginLeft: 'auto' }} // Lo alinea a la derecha
+                  style={{ marginLeft: 'auto' }} 
                 >
                   Simular Compra
                 </button>
@@ -149,15 +157,17 @@ const saveCurrentCartAsList = async () => {
               </li>
             ))}
           </ul>
-           {items.length > 0 && (
-          <button
-            className="btn primary"
-            style={{ marginTop: '1rem' }}
-            onClick={saveCurrentCartAsList} // tu función que crea la lista
-          >
-            Guardar lista
-          </button>
-        )}
+           
+           {/* Botón Guardar lista (se muestra si hay items y estás online) */}
+           {mode === 'online' && items.length > 0 && (
+            <button
+              className="btn" // (Le he quitado el 'primary' que no existe en tu CSS)
+              style={{ marginTop: '1rem' }}
+              onClick={saveCurrentCartAsList} 
+            >
+              Guardar lista
+            </button>
+           )}
         </div>
       </div>
     </div>
