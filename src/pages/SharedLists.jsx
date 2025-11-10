@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '../modules/auth/AuthContext.jsx';
 import { createList, getListsForUser } from '../services/firestore.js';
+import { jsPDF } from "jspdf";
 
 export default function SharedListsPage() {
   const { user, mode } = useAuth();
@@ -45,7 +46,24 @@ export default function SharedListsPage() {
   }
 
   const createPdf = () => {
-    
+    const carrito = JSON.parse(localStorage.getItem('carritoLista')) || [];
+
+    const doc = new jsPDF();
+
+    doc.setFontSize(16);
+    doc.text('Lista de Compra', 10, 10);
+
+    let yPosition = 20;
+
+    carrito.forEach((item, index) => {
+      // Dibujar cuadro para tick (sin funcionalidad de check al exportar pero visual)
+      doc.rect(10, yPosition - 4, 5, 5);
+      // Nombre del ítem al lado
+      doc.text(item.nombre || 'Producto', 20, yPosition);
+      yPosition += 10;
+    });
+
+    doc.save('carrito.pdf');
   }
 
   return (
