@@ -1,11 +1,13 @@
 import { useEffect, useState, useCallback } from 'react'; // 1. IMPORTAMOS useState y useCallback
 import { useAuth } from '../modules/auth/AuthContext.jsx';
-// 2. IMPORTAMOS la función para UNIRSE
-import { createList, getListsForUser, joinListById } from '../services/firestore.js';
+import { createList, getListsForUser} from '../services/firestore.js';
+import { jsPDF } from "jspdf";
+import { sendInvitation, getInvitationsForUser, acceptInvitation, rejectInvitation } from '../services/invitations'; 
 
 export default function SharedListsPage() {
   const { user, mode } = useAuth();
   const [lists, setLists] = useState([]);
+  const [invitedLists, setInvitedLists] = useState([]);
   const [loading, setLoading] = useState(false);
 
   // --- 3. NUEVO ESTADO PARA EL FORMULARIO DE UNIRSE ---
@@ -21,14 +23,14 @@ export default function SharedListsPage() {
       try {
         const res = await getListsForUser(user.uid);
         setLists(res);
-      } catch (e) {
-        console.error("Error cargando listas:", e);
-      } finally {
-        setLoading(false);
+        const invites = await getInvitationsForUser(user.email);
+        setInvitedLists(invites);
+      } else {
+        setLists([]);
+        setInvitedLists([]);
       }
-    } else {
-      setLists([]);
-    }
+    };
+    load();
   }, [user, mode]);
 
   // 5. useEffect ahora solo llama a loadLists
@@ -56,90 +58,111 @@ export default function SharedListsPage() {
     alert('Enlace copiado: ' + url);
   };
 
-  // --- 6. NUEVA FUNCIÓN PARA MANEJAR EL FORMULARIO DE UNIRSE ---
-  const onJoinList = async (e) => {
-    e.preventDefault();
-    if (!user) {
-      setJoinError('Necesitas iniciar sesión para unirte a una lista.');
-      return;
-    }
-    setJoinLoading(true);
-    setJoinError('');
-    setJoinSuccess('');
+  const showCart = () => {
+    const url = `${window.location.origin}/carrito`;
+    navigator.clipboard.writeText(url);
+    window.location.href = url
+  }
 
+  const createPdf = () => {
+    const carrito = JSON.parse(localStorage.getItem('carritoLista')) || [];
+
+    const doc = new jsPDF();
+
+    doc.setFontSize(16);
+    doc.text('Lista de Compra', 10, 10);
+
+    let yPosition = 20;
+
+    carrito.forEach((item, index) => {
+      // Dibujar cuadro para tick (sin funcionalidad de check al exportar pero visual)
+      doc.rect(10, yPosition - 4, 5, 5);
+      // Nombre del ítem al lado
+      doc.text(item.nombre || 'Producto', 20, yPosition);
+      yPosition += 10;
+    });
+
+    doc.save('carrito.pdf');
+  }
+
+
+  const inviteMembers = async () => {
+    if (!user) return alert('Inicia sesión para invitar');
+    const email = prompt('Correo del usuario a invitar');
+    if (!email) return;
     try {
-      // Extrae el ID del enlace (ej: .../invitar/LIST_ID)
-      const parts = joinUrl.trim().split('/');
-      const listId = parts[parts.length - 1];
+      await sendInvitation(email, user.uid);
+      alert('Invitación enviada a ' + email);
+    } catch (e) {
+      alert('Error enviando invitación');
+      console.error(e);
+    }
+  };
 
-      if (!listId) {
-        throw new Error('El enlace no parece válido.');
-      }
-
-      await joinListById(listId, user.uid);
-      setJoinSuccess('¡Te has unido a la lista! Actualizando...');
-      setJoinUrl('');
-      await loadLists(); // Refresca la lista de "Tus Listas"
-    } catch (err) {
-      console.error(err);
-      setJoinError(err.message || 'No se pudo unir a la lista. Verifica el enlace.');
+  const handleAcceptInvite = async (listId) => {
+    if (!user) return;
+    setLoading(true);
+    try {
+      await acceptInvitation(user.uid, listId);
+      const updatedLists = await getListsForUser(user.uid);
+      setLists(updatedLists);
+      const updatedInvites = await getInvitationsForUser(user.email);
+      setInvitedLists(updatedInvites);
+    } catch (e) {
+      alert('Error aceptando invitación');
+      console.error(e);
     } finally {
-      setJoinLoading(false);
+      setLoading(false);
+    }
+  };
+
+  const handleRejectInvite = async (listId) => {
+    if (!user) return;
+    setLoading(true);
+    try {
+      await rejectInvitation(user.uid, listId);
+      const updatedInvites = await getInvitationsForUser(user.email);
+      setInvitedLists(updatedInvites);
+    } catch (e) {
+      alert('Error rechazando invitación');
+      console.error(e);
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
-    // 7. ESTRUCTURA ACTUALIZADA A GRID
-    <div className="grid grid-cols-2">
-      {/* Columna 1: Tus listas (código existente) */}
+    <div>
       <div className="card">
-        <h2>Tus Listas</h2>
-        {mode === 'local' && <p className="muted">Inicia sesión para crear y ver tus listas.</p>}
-        
-        <div style={{ display: 'flex', gap: '.5rem', marginBottom: '1rem' }}>
-          <button className="btn" disabled={!user || loading} onClick={onCreate}>
-            Crear lista nueva
-          </button>
+        <h2>Listas compartidas</h2>
+        {mode === 'local' && <p className="muted">Para colaborar en tiempo real, inicia sesión.</p>}
+        <div style={{ display: 'flex', gap: '.5rem' }}>
+          <button className="btn" disabled={!user || loading} onClick={onCreate}>Crear lista</button>
         </div>
-
-        {loading && <p className="muted">Cargando tus listas...</p>}
-
-        <ul className="list">
+        <ul className="list" style={{ marginTop: '.5rem' }}>
           {lists.map((l) => (
             <li key={l.id}>
-              <span style={{ flexGrow: 1 }}>{l.name}</span>
-              <span className="badge badge-secondary">
-                {l.memberIds?.length || 1} {l.memberIds?.length > 1 ? 'miembros' : 'miembro'}
-              </span>
+              <span>{l.name}</span>
+              <span className="badge">miembros: {l.memberIds?.length || 1}</span>
+              <button className="btn secondary" onClick={() => showCart()}>Mostrar Carrito</button>
               <button className="btn secondary" onClick={() => copyLink(l.id)}>Copiar enlace</button>
+              <button className="btn secondary" onClick={() => createPdf()}> Descargar lista</button>
+              <button className="btn secondary" onClick={() => inviteMembers()}> Invitar miembros</button>
             </li>
           ))}
         </ul>
       </div>
-
-      {/* Columna 2: Unirse a una lista (nuevo) */}
-      <div className="card">
-        <h2>Unirse a una Lista</h2>
-        <p className="muted" style={{ marginBottom: '1rem' }}>
-          Pega el enlace de invitación que te han compartido para unirte a la lista de otro usuario.
-        </p>
-
-        <form onSubmit={onJoinList} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-          <input 
-            className="input"
-            placeholder="Pega el enlace aquí..."
-            value={joinUrl}
-            onChange={(e) => setJoinUrl(e.target.value)}
-            disabled={!user}
-          />
-          <button className="btn accent" type="submit" disabled={!user || joinLoading}>
-            {joinLoading ? 'Uniéndose...' : 'Unirme a la lista'}
-          </button>
-          
-          {joinError && <p className="muted" style={{ color: 'var(--error)' }}>{joinError}</p>}
-          {joinSuccess && <p className="muted" style={{ color: 'var(--primary)' }}>{joinSuccess}</p>}
-          {!user && <p className="muted">Debes iniciar sesión para poder unirte a una lista.</p>}
-        </form>
+      <div className="Invited">
+        <h2>Listas a las que has sido invitado</h2>
+        <ul className="list" style={{ marginTop: '.5rem' }}>
+          {invitedLists.map(invited => (
+            <li key={invited.id}>
+              <span>{invited.name}</span>
+              <button className="btn success" onClick={() => handleAcceptInvite(invited.id)}>✔️</button>
+              <button className="btn danger" onClick={() => handleRejectInvite(invited.id)}>❌</button>
+            </li>
+          ))}
+        </ul>
       </div>
     </div>
   );

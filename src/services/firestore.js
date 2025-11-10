@@ -30,15 +30,36 @@ export function subscribeToList(listId, cb) {
   });
 }
 
+// --- FUNCIÓN addListItem MODIFICADA ---
 export async function addListItem(listId, { name, quantity }) {
   const ref = doc(db, 'lists', listId);
   const snap = await getDoc(ref);
   const data = snap.data();
   const items = data?.items || [];
-  const id = crypto.randomUUID();
-  items.push({ id, name, quantity, checked: false });
-  await updateDoc(ref, { items });
+  const normalizedName = name.toLowerCase(); // Normalizamos
+
+  let itemFound = false;
+
+  // 1. Mapear para encontrar y actualizar
+  const updatedItems = items.map(it => {
+    if (it.name.toLowerCase() === normalizedName) {
+      itemFound = true;
+      // Si se encuentra, suma la cantidad
+      return { ...it, quantity: it.quantity + quantity };
+    }
+    return it;
+  });
+
+  // 2. Si no se encontró, añadirlo nuevo
+  if (!itemFound) {
+    const id = crypto.randomUUID();
+    updatedItems.push({ id, name, quantity, checked: false });
+  }
+
+  // 3. Subir la lista actualizada a Firestore
+  await updateDoc(ref, { items: updatedItems });
 }
+// --- FIN DE LA MODIFICACIÓN ---
 
 export async function removeListItem(listId, id) {
   const ref = doc(db, 'lists', listId);
