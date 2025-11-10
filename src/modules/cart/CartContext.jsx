@@ -1,8 +1,7 @@
-import { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import { createContext, useContext, useEffect, useState } from 'react';
 import { useAuth } from '../auth/AuthContext.jsx';
 import { useLocalStorage } from '../../hooks/useLocalStorage.js';
 import { ensureDefaultList, subscribeToList, addListItem, removeListItem, toggleListItem } from '../../services/firestore.js';
-// Ya no importamos 'trackPurchase' aquí
 
 const CartCtx = createContext(null);
 
@@ -29,15 +28,36 @@ export function CartProvider({ children }) {
 
   const items = mode === 'online' ? onlineItems : localItems;
 
+  // --- FUNCIÓN addItem MODIFICADA ---
   const addItem = async ({ name, quantity }) => {
     if (!name) return;
+    // Normalizamos el nombre para evitar duplicados por mayúsculas/minúsculas
+    const normalizedName = name.toLowerCase(); 
+
     if (mode === 'online' && currentListId) {
+      // La lógica online la delegamos a addListItem (ver firestore.js)
       await addListItem(currentListId, { name, quantity });
     } else {
-      const id = crypto.randomUUID();
-      setLocalItems([...localItems, { id, name, quantity, checked: false }]);
+      // --- LÓGICA LOCAL MODIFICADA ---
+      const existingItem = localItems.find(it => it.name.toLowerCase() === normalizedName);
+      
+      if (existingItem) {
+        // Si existe, actualiza la cantidad
+        setLocalItems(
+          localItems.map(it => 
+            it.name.toLowerCase() === normalizedName
+              ? { ...it, quantity: it.quantity + quantity } // Suma la cantidad
+              : it
+          )
+        );
+      } else {
+        // Si no existe, añádelo nuevo
+        const id = crypto.randomUUID();
+        setLocalItems([...localItems, { id, name, quantity, checked: false }]);
+      }
     }
   };
+  // --- FIN DE LA MODIFICACIÓN ---
 
   const removeItem = async (id) => {
     if (mode === 'online' && currentListId) {
@@ -56,8 +76,6 @@ export function CartProvider({ children }) {
   };
 
   const clearCart = async () => {
-    // ¡HEMOS QUITADO LA LÓGICA DE 'trackPurchase' DE AQUÍ!
-    // Ahora 'clearCart' solo borra.
     if (mode === 'online' && currentListId) {
       for (const it of onlineItems) { await removeListItem(currentListId, it.id); }
     } else {
