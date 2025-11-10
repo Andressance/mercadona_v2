@@ -1,10 +1,13 @@
 import { useState, useEffect} from 'react';
 import { useCart } from '../modules/cart/CartContext.jsx';
+import { useAuth } from '../modules/auth/AuthContext.jsx'; // 1. IMPORTAR useAuth
 import { useSuggestions } from '../services/suggestions.js';
+import { trackPurchase } from '../services/suggestions.js'; // 2. IMPORTAR trackPurchase
 import { getAllProducts } from '../services/product.js';
 
 export default function CartPage() {
   const { items, addItem, removeItem, toggleItem, clearCart } = useCart();
+  const { mode } = useAuth(); // 3. OBTENER EL MODO (local u online)
   const [name, setName] = useState('');
   const [qty, setQty] = useState(1);
   const [allProducts, setAllProducts] = useState([]);
@@ -31,19 +34,27 @@ export default function CartPage() {
   };
 
   const onSelectMatch = (product) => {
-    setName(product.nombre); // solo rellenamos el input
-    setQty(1); // opcional: reiniciamos cantidad a 1
-    setMatches([]); // cerramos el dropdown
+    setName(product.nombre);
+    setQty(1);
+    setMatches([]);
   };  
 
   const onAdd = (e) => {
     e.preventDefault();
     if (!name.trim()) return;
-    // Podrías validar que name exista en allProducts antes de añadir
     const exists = allProducts.find(p => p.nombre.toLowerCase() === name.toLowerCase());
     if (!exists) return;
     addItem({ name: exists.nombre, quantity: qty });
     setName(''); setQty(1); setMatches([]);
+  };
+
+  // 4. NUEVA FUNCIÓN HANDLER PARA EL BOTÓN
+  const onSimulatePurchase = () => {
+    // Solo aprende en modo local (invitado)
+    if (mode === 'local' && items.length > 0) {
+      trackPurchase(items); // Primero aprende
+    }
+    clearCart(); // Luego vacía el carrito
   };
 
   return (
@@ -75,11 +86,36 @@ export default function CartPage() {
               )}
             </div>
             <input className="input" type="number" min={1} value={qty} onChange={(e) => setQty(parseInt(e.target.value || '1'))} />
-            <div style={{ display: 'flex', gap: '.5rem' }}>
+            
+            {/* --- 5. DIV DE BOTONES MODIFICADO --- */}
+            <div style={{ display: 'flex', gap: '.5rem', flexWrap: 'wrap', marginTop: '0.5rem' }}>
               <button className="btn" type="submit">Añadir</button>
-              <button className="btn secondary" type="button" onClick={clearCart}>Vaciar</button>
+              
+              {/* Botón "Vaciar" (ahora secundario) */}
+              <button 
+                className="btn secondary" 
+                type="button" 
+                onClick={clearCart}
+                disabled={items.length === 0}
+              >
+                Vaciar
+              </button>
+
+              {/* Botón "Simular Compra" (el nuevo botón principal) */}
+              {mode === 'local' && (
+                <button 
+                  className="btn accent" // Color naranja para destacar
+                  type="button" 
+                  onClick={onSimulatePurchase}
+                  disabled={items.length === 0}
+                  style={{ marginLeft: 'auto' }} // Lo alinea a la derecha
+                >
+                  Simular Compra
+                </button>
+              )}
             </div>
           </form>
+
           <ul className="list">
             {items.map((it) => (
               <li key={it.id}>

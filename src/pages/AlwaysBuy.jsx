@@ -11,17 +11,20 @@ export default function AlwaysBuyPage() {
 
   // Función para recargar la lista
   const refreshList = () => {
-    // La lógica de "Siempre Compro" solo funciona en modo invitado
     if (mode === 'local') {
       setAlways(getAlwaysList());
     } else {
-      setAlways([]); // Vacío si estás online (porque no hemos implementado la lógica de Firebase)
+      setAlways([]);
     }
   };
 
-  // Recargamos la lista cuando carga la página o cuando cambia el modo (invitado/online)
+  // Recargamos la lista cuando carga la página o cuando cambia el modo
+  // y también usamos un 'focus' listener para que se actualice si
+  // el usuario compra y vuelve a esta pestaña.
   useEffect(() => {
     refreshList();
+    window.addEventListener('focus', refreshList);
+    return () => window.removeEventListener('focus', refreshList);
   }, [mode]);
 
   const onAddToCart = (prod) => {
@@ -35,7 +38,7 @@ export default function AlwaysBuyPage() {
       {mode === 'local' ? (
         <p className="muted">
           Aquí aparecen automáticamente los productos que has comprado 3 veces o más.
-          Si dejas de comprar un producto, desaparecerá de la lista.
+          Si dejas de comprar un producto 5 veces, desaparecerá de la lista.
         </p>
       ) : (
         <p className="muted">
@@ -45,14 +48,14 @@ export default function AlwaysBuyPage() {
 
       {/* --- ESTADO VACÍO O LISTA --- */}
       {always.length === 0 ? (
-        <div style={{ textAlign: 'center', padding: '1rem 0', border: '2px dashed #e2e8f0', borderRadius: '.5rem', marginTop: '1rem' }}>
+        <div style={{ textAlign: 'center', padding: '1rem 0', border: '2px dashed var(--border)', borderRadius: '.5rem', marginTop: '1rem' }}>
           <p className="muted">
             {mode === 'local' 
               ? 'Aún no hay productos en tu lista. ¡Sigue comprando!' 
               : 'Inicia sesión en "Modo Invitado" para ver esta función.'}
           </p>
           <p className="muted" style={{ fontSize: '.8rem', marginTop: '1rem' }}>
-            (Para probar, ve al Carrito, añade productos y pulsa "Vaciar".
+            (Para probar, ve al Carrito, añade productos y pulsa "Simular Compra".
             Repite 3 veces con el mismo producto.)
           </p>
         </div>
@@ -60,13 +63,15 @@ export default function AlwaysBuyPage() {
         <ul className="list" style={{ marginTop: '.5rem' }}>
           {always.map((it) => (
             <li key={it.id}>
-              {/* Nombre y contador de compras */}
+              {/* Nombre del producto */}
               <span style={{ flexGrow: 1, fontWeight: '500' }}>{it.name}</span>
-              <span className="badge">Comprado {it.count} veces</span>
+              
+              {/* --- ¡AQUÍ ESTÁ LA SOLUCIÓN! --- */}
+              {/* Esta línea está comentada para que no se vea el contador */}
+              {/* <span className="badge">Comprado {it.count} veces</span> */}
               
               {/* Acciones */}
               <button className="btn secondary" onClick={() => onAddToCart(it)}>Añadir al carrito</button>
-              {/* El botón "Eliminar" se quita porque la lista es automática */}
             </li>
           ))}
         </ul>

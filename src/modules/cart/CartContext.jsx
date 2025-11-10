@@ -2,8 +2,7 @@ import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../auth/AuthContext.jsx';
 import { useLocalStorage } from '../../hooks/useLocalStorage.js';
 import { ensureDefaultList, subscribeToList, addListItem, removeListItem, toggleListItem } from '../../services/firestore.js';
-// IMPORTAMOS EL NUEVO SERVICIO
-import { trackPurchase } from '../../services/suggestions.js';
+// Ya no importamos 'trackPurchase' aquí
 
 const CartCtx = createContext(null);
 
@@ -57,14 +56,8 @@ export function CartProvider({ children }) {
   };
 
   const clearCart = async () => {
-    // ¡AQUÍ ESTÁ LA MAGIA!
-    // Antes de borrar el carrito, registramos la "compra"
-    // Solo lo hacemos en modo local, ya que nuestra lógica de tracking es local
-    if (mode === 'local' && localItems.length > 0) {
-      trackPurchase(localItems);
-    }
-
-    // Lógica original de clearCart
+    // ¡HEMOS QUITADO LA LÓGICA DE 'trackPurchase' DE AQUÍ!
+    // Ahora 'clearCart' solo borra.
     if (mode === 'online' && currentListId) {
       for (const it of onlineItems) { await removeListItem(currentListId, it.id); }
     } else {

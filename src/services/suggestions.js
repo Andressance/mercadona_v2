@@ -30,7 +30,7 @@ function savePurchaseHistory(history) {
 
 /**
  * ¡LA LÓGICA PRINCIPAL!
- * Se llama cuando el usuario "compra" (limpia el carrito).
+ * Se llama cuando el usuario "compra" (simula la compra).
  * @param {Array<{name: string}>} purchasedItems - Items que estaban en el carrito
  */
 export function trackPurchase(purchasedItems) {
@@ -49,8 +49,8 @@ export function trackPurchase(purchasedItems) {
       const item = history[key];
       item.purchasesSinceLastBuy = (item.purchasesSinceLastBuy || 0) + 1;
 
-      // REGLA DE 10 COMPRAS: Si lo olvida 10 veces y estaba en la lista...
-      if (item.purchasesSinceLastBuy > 10 && item.count >= 3) {
+      // REGLA DE 5 COMPRAS: Si lo olvida 5 veces o más y estaba en la lista...
+      if (item.purchasesSinceLastBuy >= 5 && item.count >= 3) {
         item.count = 2; // ...lo bajamos a 2 (sale de la lista)
         item.purchasesSinceLastBuy = 0; // Reseteamos para no volver a bajarlo
       }
@@ -87,7 +87,7 @@ export function getAlwaysList() {
       list.push({
         id: key, // Usamos la key (nombre normalizado) como ID
         name: item.name,
-        count: item.count
+        count: item.count // Mantenemos el count para lógica interna
       });
     }
   }
@@ -99,7 +99,6 @@ export function getAlwaysList() {
 // (Esta parte es para la página "Cart.jsx" y puede convivir)
 
 export function useSuggestions(cartItems) {
-  // Las sugerencias ahora también pueden incluir tus "Always Buy"
   const always = getAlwaysList();
 
   const base = [
