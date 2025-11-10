@@ -25,11 +25,15 @@ export default function SharedListsPage() {
         setLists(res);
         const invites = await getInvitationsForUser(user.email);
         setInvitedLists(invites);
-      } else {
-        setLists([]);
+      } catch (e) {
+        console.error(e);
         setInvitedLists([]);
       }
-    };
+      
+    }else {
+        setLists([]);
+        setInvitedLists([]);
+      };
     load();
   }, [user, mode]);
 
