@@ -1,6 +1,5 @@
 import { db } from './firebase.js';
-import { collection, addDoc, doc, getDoc, getDocs, onSnapshot, query, where, updateDoc } from 'firebase/firestore';
-
+import { collection, addDoc, doc, getDoc, getDocs, onSnapshot, query, where, updateDoc, arrayUnion } from 'firebase/firestore';
 const listsCol = collection(db, 'lists');
 
 export async function createList({ name, ownerId }) {
@@ -72,13 +71,13 @@ export async function toggleListItem(listId, id) {
 
 export async function joinListById(listId, userId) {
   const ref = doc(db, 'lists', listId);
-  const snap = await getDoc(ref);
-  if (!snap.exists()) throw new Error('Lista no encontrada');
-  const data = snap.data();
-  const memberIds = data.memberIds || [];
-  if (!memberIds.includes(userId)) {
-    await updateDoc(ref, { memberIds: [...memberIds, userId] });
-  }
+
+  // Esta operación SÓLO escribe, no lee primero.
+  // Usa 'arrayUnion' para añadir el userId de forma atómica.
+  // Si el usuario ya existe en 'memberIds', no hace nada.
+  await updateDoc(ref, {
+    memberIds: arrayUnion(userId)
+  });
 }
 
 // --- NUEVA FUNCIÓN ---
