@@ -2,6 +2,8 @@ import { useState, useEffect} from 'react';
 import { useCart } from '../modules/cart/CartContext.jsx';
 import { useSuggestions } from '../services/suggestions.js';
 import { getAllProducts } from '../services/product.js';
+import { createNewList } from '../services/list.js';
+import { useAuth } from '../modules/auth/AuthContext.jsx';
 
 export default function CartPage() {
   const { items, addItem, removeItem, toggleItem, clearCart } = useCart();
@@ -12,7 +14,10 @@ export default function CartPage() {
   const suggestions = useSuggestions(items);
 
   useEffect(() => {
-    getAllProducts().then(setAllProducts);
+  getAllProducts().then(res => {
+    console.log('Productos cargados:', res);
+    setAllProducts(res);
+  });
   }, []);
 
    const onChangeName = (e) => {
@@ -45,6 +50,34 @@ export default function CartPage() {
     addItem({ name: exists.nombre, quantity: qty });
     setName(''); setQty(1); setMatches([]);
   };
+
+  const { user } = useAuth(); // user.uid viene de Firebase Auth
+
+const saveCurrentCartAsList = async () => {
+  if (!user || !user.uid) {
+    alert("Debes iniciar sesión para guardar la lista");
+    console.log("DEBUG: user o user.uid es null", user);
+    return;
+  }
+
+  if (items.length === 0) {
+    alert("Tu carrito está vacío");
+    console.log("DEBUG: carrito vacío");
+    return;
+  }
+
+  const products = items.map(it => ({ name: it.name, quantity: it.quantity }));
+
+  try {
+    const listId = await createNewList(user.uid, products);
+    alert(`✅ Lista creada con ID: ${listId}`);
+    console.log("Lista creada con ID:", listId);
+  } catch (err) {
+    // Aquí vemos el error real de Firebase
+    console.error("Error real creando la lista:", err);
+    alert(`❌ Error al crear la lista: ${err.message}`);
+  }
+};
 
   return (
     <div className="row">
@@ -90,6 +123,15 @@ export default function CartPage() {
               </li>
             ))}
           </ul>
+           {items.length > 0 && (
+          <button
+            className="btn primary"
+            style={{ marginTop: '1rem' }}
+            onClick={saveCurrentCartAsList} // tu función que crea la lista
+          >
+            Guardar lista
+          </button>
+        )}
         </div>
       </div>
     </div>
