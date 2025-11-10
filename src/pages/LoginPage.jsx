@@ -3,7 +3,6 @@ import { useAuth } from '../modules/auth/AuthContext.jsx';
 import { useNavigate, Link } from 'react-router-dom';
 
 export default function LoginPage() {
-  // 'useLocalMode' ya no se usa aquí, así que lo quitamos
   const { login } = useAuth();
   const navigate = useNavigate();
   const [email, setEmail] = useState('');
@@ -16,7 +15,12 @@ export default function LoginPage() {
     setLoading(true); setError('');
     try {
       await login(email, password);
-      navigate('/'); // Redirige al inicio tras login exitoso
+      
+      // --- CAMBIO AQUÍ ---
+      // Redirige al carrito en lugar de al inicio
+      navigate('/carrito'); 
+      // --- FIN DEL CAMBIO ---
+
     } catch (err) {
       setError(err.message);
     } finally {
@@ -28,18 +32,13 @@ export default function LoginPage() {
     <div className="row">
       <div className="col">
         <div className="card">
-          {/* --- CAMBIO 1: Título cambiado --- */}
           <h2>Iniciar Sesión</h2>
-
           <form onSubmit={onLogin} style={{ display: 'flex', flexDirection: 'column', gap: '.5rem' }}>
             <input className="input" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} />
             <input className="input" type="password" placeholder="Contraseña" value={password} onChange={(e) => setPassword(e.target.value)} />
             
             <div style={{ display: 'flex', gap: '.5rem', marginTop: '.5rem' }}>
               <button className="btn" type="submit" disabled={loading}>Entrar</button>
-              
-              {/* --- CAMBIO 2: Botón "Usar sin registro" eliminado --- */}
-              {/* <button className="btn secondary" type="button" onClick={useLocalMode}>Usar sin registro</button> */}
             </div>
 
             {error && <p className="muted" style={{ color: 'red', marginTop: '.5rem' }}>{error}</p>}
