@@ -31,10 +31,9 @@ export default function CartPage() {
   };
 
   const onSelectMatch = (product) => {
-    addItem({ name: product.nombre, quantity: 1 });
-    setName('');
-    setQty(1);
-    setMatches([]);
+    setName(product.nombre); // solo rellenamos el input
+    setQty(1); // opcional: reiniciamos cantidad a 1
+    setMatches([]); // cerramos el dropdown
   };  
 
   const onAdd = (e) => {
