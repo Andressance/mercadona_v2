@@ -2,28 +2,37 @@ import { useEffect, useState } from 'react';
 import { useAuth } from '../modules/auth/AuthContext.jsx';
 import { createList, getListsForUser} from '../services/firestore.js';
 import { jsPDF } from "jspdf";
-import { sendInvitation, getInvitationsForUser, acceptInvitation, rejectInvitation } from '../services/invitations'; 
+import { useNavigate } from 'react-router-dom'; // Añadir al inicio
+import { doc, getDoc } from 'firebase/firestore'; // Añadir al inicio
+import { db } from '../services/firebase'; // Añadir al inicio
 
 export default function SharedListsPage() {
+  const navigate = useNavigate();
   const { user, mode } = useAuth();
   const [lists, setLists] = useState([]);
   const [invitedLists, setInvitedLists] = useState([]);
   const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    const load = async () => {
-      if (mode === 'online' && user) {
-        const res = await getListsForUser(user.uid);
-        setLists(res);
-        const invites = await getInvitationsForUser(user.email);
-        setInvitedLists(invites);
-      } else {
-        setLists([]);
-        setInvitedLists([]);
-      }
-    };
-    load();
-  }, [user, mode]);
+useEffect(() => {
+  const load = async () => {
+    if (mode === 'online' && user) {
+      console.log('Cargando listas para user.uid:', user.uid); // LOG 5
+      
+      const res = await getListsForUser(user.uid);
+      
+      console.log('Listas obtenidas:', res); // LOG 6
+      
+      setLists(res);
+      //const invites = await getInvitationsForUser(user.uid); // CAMBIA de user.email a user.uid
+      //setInvitedLists(invites);
+    } else {
+      setLists([]);
+      //setInvitedLists([]);
+    }
+  };
+  load();
+}, [user, mode]);
+
 
   const onCreate = async () => {
     if (!user) return alert('Inicia sesión para crear listas');
@@ -44,11 +53,31 @@ export default function SharedListsPage() {
     alert('Enlace copiado: ' + url);
   };
 
-  const showCart = () => {
-    const url = `${window.location.origin}/carrito`;
-    navigator.clipboard.writeText(url);
-    window.location.href = url
-  }
+  const showCart = async (listId) => {
+    try {
+      // Obtener la lista de Firestore
+      const listRef = doc(db, 'lists', listId);
+      const listSnap = await getDoc(listRef);
+      
+      if (!listSnap.exists()) {
+        alert('Lista no encontrada');
+        return;
+      }
+      
+      const listData = listSnap.data();
+      
+      // Navegar al carrito pasando los productos en el state
+      navigate('/carrito', { 
+        state: { 
+          products: listData.products || [],
+          listName: listData.name 
+        } 
+      });
+    } catch (error) {
+      console.error('Error cargando lista:', error);
+      alert('Error al cargar la lista');
+    }
+  };
 
   const createPdf = () => {
     const carrito = JSON.parse(localStorage.getItem('carritoLista')) || [];
@@ -71,52 +100,6 @@ export default function SharedListsPage() {
     doc.save('carrito.pdf');
   }
 
-
-  const inviteMembers = async () => {
-    if (!user) return alert('Inicia sesión para invitar');
-    const email = prompt('Correo del usuario a invitar');
-    if (!email) return;
-    try {
-      await sendInvitation(email, user.uid);
-      alert('Invitación enviada a ' + email);
-    } catch (e) {
-      alert('Error enviando invitación');
-      console.error(e);
-    }
-  };
-
-  const handleAcceptInvite = async (listId) => {
-    if (!user) return;
-    setLoading(true);
-    try {
-      await acceptInvitation(user.uid, listId);
-      const updatedLists = await getListsForUser(user.uid);
-      setLists(updatedLists);
-      const updatedInvites = await getInvitationsForUser(user.email);
-      setInvitedLists(updatedInvites);
-    } catch (e) {
-      alert('Error aceptando invitación');
-      console.error(e);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleRejectInvite = async (listId) => {
-    if (!user) return;
-    setLoading(true);
-    try {
-      await rejectInvitation(user.uid, listId);
-      const updatedInvites = await getInvitationsForUser(user.email);
-      setInvitedLists(updatedInvites);
-    } catch (e) {
-      alert('Error rechazando invitación');
-      console.error(e);
-    } finally {
-      setLoading(false);
-    }
-  };
-
   return (
     <div>
       <div className="card">
@@ -130,22 +113,8 @@ export default function SharedListsPage() {
             <li key={l.id}>
               <span>{l.name}</span>
               <span className="badge">miembros: {l.memberIds?.length || 1}</span>
-              <button className="btn secondary" onClick={() => showCart()}>Mostrar Carrito</button>
+              <button className="btn secondary" onClick={() => showCart(l.id)}>Mostrar Carrito</button>
               <button className="btn secondary" onClick={() => copyLink(l.id)}>Copiar enlace</button>
-              <button className="btn secondary" onClick={() => createPdf()}> Descargar lista</button>
-              <button className="btn secondary" onClick={() => inviteMembers()}> Invitar miembros</button>
-            </li>
-          ))}
-        </ul>
-      </div>
-      <div className="Invited">
-        <h2>Listas a las que has sido invitado</h2>
-        <ul className="list" style={{ marginTop: '.5rem' }}>
-          {invitedLists.map(invited => (
-            <li key={invited.id}>
-              <span>{invited.name}</span>
-              <button className="btn success" onClick={() => handleAcceptInvite(invited.id)}>✔️</button>
-              <button className="btn danger" onClick={() => handleRejectInvite(invited.id)}>❌</button>
             </li>
           ))}
         </ul>

@@ -3,10 +3,26 @@ import { collection, addDoc, doc, getDoc, getDocs, onSnapshot, query, where, upd
 
 const listsCol = collection(db, 'lists');
 
-export async function createList({ name, ownerId }) {
-  const docRef = await addDoc(listsCol, { name, ownerId, memberIds: [ownerId], items: [] });
-  return docRef.id;
+export async function createList(data) {
+  console.log('createList llamado con:', data); // LOG 7
+  
+  const docData = {
+    name: data.name,
+    ownerId: data.ownerId,
+    memberIds: data.memberIds || [data.ownerId],
+    products: data.products || [],
+    createdAt: Date.now()
+  };
+  
+  console.log('Guardando en Firestore:', docData); // LOG 8
+  
+  const listRef = await addDoc(collection(db, 'lists'), docData);
+  
+  console.log('Documento creado con ID:', listRef.id); // LOG 9
+  
+  return listRef.id;
 }
+
 
 export async function ensureDefaultList(userId) {
   // Leer listas donde el usuario ya es miembro (alineado con reglas)
@@ -17,10 +33,19 @@ export async function ensureDefaultList(userId) {
 }
 
 export async function getListsForUser(userId) {
-  const q = query(listsCol, where('memberIds', 'array-contains', userId));
-  const snap = await getDocs(q);
-  return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  console.log('getListsForUser llamado para:', userId); // LOG 10
+  
+  const listsRef = collection(db, 'lists');
+  const q = query(listsRef, where('memberIds', 'array-contains', userId));
+  const querySnapshot = await getDocs(q);
+  
+  const lists = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+  
+  console.log('Consulta devolvió:', lists); // LOG 11
+  
+  return lists;
 }
+
 
 export function subscribeToList(listId, cb) {
   const ref = doc(db, 'lists', listId);

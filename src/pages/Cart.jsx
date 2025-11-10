@@ -1,14 +1,16 @@
 import { useState, useEffect} from 'react';
 import { useCart } from '../modules/cart/CartContext.jsx';
 import { useAuth } from '../modules/auth/AuthContext.jsx'; 
-// AHORA IMPORTAMOS LA VERSIÓN ASYNC DE 'getAlwaysList'
 import { useSuggestions, trackPurchase, getAlwaysList } from '../services/suggestions.js'; 
 import { getAllProducts } from '../services/product.js';
 // (Quitamos las importaciones de 'list.js' que daban problemas,
 //  ya que el botón 'Guardar lista' ya estaba en el código base anterior)
 // import { createNewList, getUserUidFromFirestore } from '../services/list.js';
+import { createList } from '../services/firestore.js';
+import { useLocation } from 'react-router-dom';
 
 export default function CartPage() {
+  const location = useLocation(); // Añadir hook
   const { items, addItem, removeItem, toggleItem, clearCart } = useCart();
   const { user, mode } = useAuth(); // Obtenemos 'user' y 'mode'
   const [name, setName] = useState('');
@@ -21,12 +23,28 @@ export default function CartPage() {
   
   // 1. Cargamos la lista "Siempre compro" del usuario logueado
   useEffect(() => {
-    if (mode === 'online' && user) {
-      getAlwaysList(user.uid).then(setAlwaysList);
-    } else {
-      setAlwaysList([]); // Vacía si es invitado
+    if (location.state?.products) {
+      const productsToLoad = location.state.products;
+      
+      // Vaciar carrito actual y cargar nuevos productos
+      clearCart();
+      
+      productsToLoad.forEach(product => {
+        addItem({ 
+          name: product.name, 
+          quantity: product.quantity 
+        });
+      });
+      
+      // Opcional: mostrar mensaje
+      if (location.state.listName) {
+        alert(`Lista "${location.state.listName}" cargada en el carrito`);
+      }
+      
+      // Limpiar el state para evitar recargar si el usuario recarga la página
+      window.history.replaceState({}, document.title);
     }
-  }, [mode, user, items]); // 'items' para que recargue si simulamos compra
+  }, [location.state]);
 
   // 2. Pasamos la lista cargada al hook de sugerencias
   const suggestions = useSuggestions(items, alwaysList);
@@ -77,16 +95,46 @@ export default function CartPage() {
   };
 
   // (Mantenemos la lógica de 'Guardar Lista' que ya tenías)
-  const saveCurrentCartAsList = async () => {
-    if (!user || !user.uid) {
-        alert("Debes iniciar sesión para guardar la lista");
-        return;
-    }
-    // ... (resto de tu lógica para guardar lista)
-    // const products = items.map(it => ({ name: it.name, quantity: it.quantity }));
-    // const listId = await createNewList(user.uid, products);
-    // alert(`Lista creada con ID: ${listId}`);
-  };
+const saveCurrentCartAsList = async () => {
+  if (!user || !user.uid) {
+    alert("Debes iniciar sesión para guardar la lista");
+    return;
+  }
+  
+  console.log('User UID:', user.uid); // LOG 1
+  
+  const name = prompt('Nombre de la lista');
+  if (!name) return;
+  
+  const products = items.map(it => ({ name: it.name, quantity: it.quantity }));
+  
+  console.log('Datos a guardar:', { // LOG 2
+    name, 
+    ownerId: user.uid,
+    memberIds: [user.uid],
+    products
+  });
+  
+  try {
+    const listId = await createList({ 
+      name, 
+      ownerId: user.uid,
+      memberIds: [user.uid],
+      products
+    });
+    
+    console.log('Lista guardada con ID:', listId); // LOG 3
+    
+    alert(`Lista guardada: ${name}`);
+    clearCart();
+    const url = `${window.location.origin}/listas`;
+    navigator.clipboard.writeText(url);
+    window.location.href = url
+  } catch (error) {
+    console.error('Error completo:', error); // LOG 4
+    alert('Error al guardar la lista: ' + error.message);
+  }
+};
 
   return (
     <div className="row">

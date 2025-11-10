@@ -13,11 +13,14 @@ export const getUserUidFromFirestore = async (authUid) => {
   return userData.uid; // esto es el UID que guardaste en tu tabla 'users'
 };
 
-export const createNewList = async (ownerUid, products) => {
-  const docRef = await addDoc(collection(db, "Lista"), {
-    ownerId: ownerUid,
-    products,
-    createdAt: serverTimestamp(),
+// En tu archivo de servicios (firestore.js o similar)
+export async function createNewList(ownerId, products) {
+  const listRef = await addDoc(collection(db, "lists"), {
+    name: "Mi Lista de Compra", // O pide un nombre
+    ownerId: ownerId,
+    memberIds: [ownerId], // IMPORTANTE: incluir al owner como miembro
+    products: products,
+    createdAt: Date.now()
   });
-  return docRef.id;
-};
+  return listRef.id;
+}
