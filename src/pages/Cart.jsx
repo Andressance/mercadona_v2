@@ -6,8 +6,8 @@ import { getAllProducts } from '../services/product.js';
 // (Quitamos las importaciones de 'list.js' que daban problemas,
 //  ya que el botón 'Guardar lista' ya estaba en el código base anterior)
 // import { createNewList, getUserUidFromFirestore } from '../services/list.js';
-import { createList } from '../services/firestore.js';
 import { useLocation } from 'react-router-dom';
+import { createNewList, getUserUidFromFirestore, generatePdf } from '../services/list.js';
 
 export default function CartPage() {
   const location = useLocation(); // Añadir hook
@@ -95,44 +95,32 @@ export default function CartPage() {
   };
 
   // (Mantenemos la lógica de 'Guardar Lista' que ya tenías)
-const saveCurrentCartAsList = async () => {
+  const saveCurrentCartAsList = async () => {
   if (!user || !user.uid) {
     alert("Debes iniciar sesión para guardar la lista");
     return;
   }
-  
-  console.log('User UID:', user.uid); // LOG 1
-  
-  const name = prompt('Nombre de la lista');
-  if (!name) return;
-  
-  const products = items.map(it => ({ name: it.name, quantity: it.quantity }));
-  
-  console.log('Datos a guardar:', { // LOG 2
-    name, 
-    ownerId: user.uid,
-    memberIds: [user.uid],
-    products
-  });
-  
+
+  let ownerUid;
   try {
-    const listId = await createList({ 
-      name, 
-      ownerId: user.uid,
-      memberIds: [user.uid],
-      products
-    });
-    
-    console.log('Lista guardada con ID:', listId); // LOG 3
-    
-    alert(`Lista guardada: ${name}`);
-    clearCart();
-    const url = `${window.location.origin}/listas`;
-    navigator.clipboard.writeText(url);
-    window.location.href = url
-  } catch (error) {
-    console.error('Error completo:', error); // LOG 4
-    alert('Error al guardar la lista: ' + error.message);
+    ownerUid = await getUserUidFromFirestore(user.uid);
+  } catch (err) {
+    console.error(err);
+    alert("No se pudo obtener el UID del usuario");
+    return;
+  }
+
+  const products = items.map(it => ({ name: it.name, quantity: it.quantity }));
+
+  try {
+    const listId = await createNewList(ownerUid, products);
+    alert(`Lista creada con ID: ${listId}`);
+
+    // ✅ Genera PDF aquí mismo
+    generatePdf(products);
+  } catch (err) {
+    console.error(err);
+    alert("Error al crear la lista");
   }
 };
 
