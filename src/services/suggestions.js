@@ -1,58 +1,71 @@
 import { useMemo } from 'react';
-
-// CLAVE: Usamos una nueva clave de localStorage para el historial de hábitos
-const HISTORY_KEY = 'purchase.history';
+// IMPORTAMOS LOS SERVICIOS DE FIRESTORE
+import { db } from "./firebase.js";
+import { doc, getDoc, setDoc } from "firebase/firestore";
 
 /**
  * Normaliza un nombre de producto para usarlo como clave
- * "Leche Desnatada" -> "leche desnatada"
  */
 const normalize = (name) => name.toLowerCase().trim();
 
 /**
- * Obtiene el historial de compras desde localStorage
- * @returns {Object<string, {name: string, count: number, purchasesSinceLastBuy: number}>}
+ * Obtiene el historial de compras desde Firestore
+ * @param {string} uid - ID del usuario
+ * @returns {Promise<Object>}
  */
-function getPurchaseHistory() {
+async function getPurchaseHistory(uid) {
+  if (!uid) return {};
   try {
-    return JSON.parse(localStorage.getItem(HISTORY_KEY) || '{}');
-  } catch {
+    const userRef = doc(db, 'users', uid);
+    const userSnap = await getDoc(userRef);
+    if (userSnap.exists()) {
+      return userSnap.data().purchaseHistory || {};
+    }
+    return {};
+  } catch (e) {
+    console.error("Error al obtener historial de compra:", e);
     return {};
   }
 }
 
 /**
- * Guarda el historial de compras en localStorage
+ * Guarda el historial de compras en Firestore
+ * @param {string} uid - ID del usuario
+ * @param {Object} history - El objeto de historial
  */
-function savePurchaseHistory(history) {
-  localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
+async function savePurchaseHistory(uid, history) {
+  if (!uid) return;
+  try {
+    const userRef = doc(db, 'users', uid);
+    // Usamos { merge: true } para no sobrescribir otros datos del usuario
+    await setDoc(userRef, { purchaseHistory: history }, { merge: true });
+  } catch (e) {
+    console.error("Error al guardar historial de compra:", e);
+  }
 }
 
 /**
- * ¡LA LÓGICA PRINCIPAL!
  * Se llama cuando el usuario "compra" (simula la compra).
+ * AHORA ES ASYNC Y USA UID
+ * @param {string} uid - ID del usuario
  * @param {Array<{name: string}>} purchasedItems - Items que estaban en el carrito
  */
-export function trackPurchase(purchasedItems) {
-  const history = getPurchaseHistory();
+export async function trackPurchase(uid, purchasedItems) {
+  const history = await getPurchaseHistory(uid);
   const purchasedKeys = new Set(purchasedItems.map(it => normalize(it.name)));
 
   // 1. Actualizar CADA producto en el historial
   for (const key in history) {
     if (purchasedKeys.has(key)) {
-      // El usuario COMPRÓ este item
       const item = history[key];
-      item.count = (item.count || 0) + 1; // Incrementar contador
-      item.purchasesSinceLastBuy = 0; // Resetear contador de "olvido"
+      item.count = (item.count || 0) + 1;
+      item.purchasesSinceLastBuy = 0;
     } else {
-      // El usuario NO COMPRÓ este item
       const item = history[key];
       item.purchasesSinceLastBuy = (item.purchasesSinceLastBuy || 0) + 1;
-
-      // REGLA DE 5 COMPRAS: Si lo olvida 5 veces o más y estaba en la lista...
       if (item.purchasesSinceLastBuy >= 5 && item.count >= 3) {
-        item.count = 2; // ...lo bajamos a 2 (sale de la lista)
-        item.purchasesSinceLastBuy = 0; // Reseteamos para no volver a bajarlo
+        item.count = 2;
+        item.purchasesSinceLastBuy = 0;
       }
     }
   }
@@ -62,45 +75,46 @@ export function trackPurchase(purchasedItems) {
     const key = normalize(item.name);
     if (!history[key]) {
       history[key] = {
-        name: item.name.trim(), // Guardamos el nombre con mayúsculas
+        name: item.name.trim(),
         count: 1,
         purchasesSinceLastBuy: 0
       };
     }
   }
 
-  savePurchaseHistory(history);
+  await savePurchaseHistory(uid, history);
 }
 
 /**
  * Obtiene la lista "Siempre Compro" (count >= 3)
- * @returns {Array<{id: string, name: string, count: number}>}
+ * AHORA ES ASYNC Y USA UID
+ * @param {string} uid - ID del usuario
+ * @returns {Promise<Array<{id: string, name: string, count: number}>>}
  */
-export function getAlwaysList() {
-  const history = getPurchaseHistory();
+export async function getAlwaysList(uid) {
+  const history = await getPurchaseHistory(uid);
   const list = [];
   
   for (const key in history) {
     const item = history[key];
-    // REGLA DE 3 COMPRAS: Si el contador es 3 o más, aparece en la lista
     if (item.count >= 3) {
       list.push({
-        id: key, // Usamos la key (nombre normalizado) como ID
+        id: key,
         name: item.name,
-        count: item.count // Mantenemos el count para lógica interna
+        count: item.count
       });
     }
   }
-  return list.sort((a, b) => b.count - a.count); // Opcional: ordenar por más comprados
+  return list.sort((a, b) => b.count - a.count);
 }
 
 
-// --- Lógica de Sugerencias (no la tocamos) ---
-// (Esta parte es para la página "Cart.jsx" y puede convivir)
+// --- Lógica de Sugerencias MODIFICADA ---
+// Ahora acepta 'alwaysList' como argumento
 
-export function useSuggestions(cartItems) {
-  const always = getAlwaysList();
-
+export function useSuggestions(cartItems, alwaysList = []) {
+  // const always = getAlwaysList(); // Ya no se llama aquí
+  
   const base = [
     { id: 'pan', name: 'Pan', defaultQty: 1 },
     { id: 'leche', name: 'Leche', defaultQty: 2 },
@@ -114,8 +128,9 @@ export function useSuggestions(cartItems) {
   ];
   return useMemo(() => {
     const namesInCart = new Set(cartItems.map((i) => normalize(i.name)));
-    const alwaysSugs = always.map((a) => ({ id: 'alw-' + a.id, name: a.name, defaultQty: 1 }));
+    // Usa la lista que le pasamos como argumento
+    const alwaysSugs = alwaysList.map((a) => ({ id: 'alw-' + a.id, name: a.name, defaultQty: 1 }));
     const all = [...alwaysSugs, ...base, ...seasonal];
     return all.filter((s) => !namesInCart.has(normalize(s.name))).slice(0, 12);
-  }, [cartItems, always]);
+  }, [cartItems, alwaysList]); // Depende de alwaysList
 }
