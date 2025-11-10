@@ -1,7 +1,6 @@
 import { collection, addDoc, doc, getDoc, serverTimestamp } from "firebase/firestore";
 import { db } from "./firebase.js";
 import jsPDF from 'jspdf';
-import jsPDF from 'jspdf';
 
 export const getUserUidFromFirestore = async (authUid) => {
   const userRef = doc(db, "users", authUid); // asumimos que el docId = authUid
