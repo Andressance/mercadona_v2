@@ -2,6 +2,22 @@ import { useState } from 'react';
 import { useAuth } from '../modules/auth/AuthContext.jsx';
 import { useNavigate, Link } from 'react-router-dom';
 
+// Helper para traducir errores de Firebase a español
+function getAuthErrorES(errorCode) {
+  switch (errorCode) {
+    case 'auth/invalid-email':
+      return 'El formato del correo electrónico no es válido.';
+    case 'auth/email-already-in-use':
+      return 'Este correo electrónico ya está registrado.';
+    case 'auth/weak-password':
+      return 'La contraseña es demasiado débil (mínimo 6 caracteres).';
+    case 'auth/too-many-requests':
+      return 'Demasiados intentos fallidos. Por favor, inténtalo de nuevo más tarde.';
+    default:
+      return 'Error en el registro. Por favor, inténtalo de nuevo.';
+  }
+}
+
 export default function RegisterPage() {
   const { register } = useAuth();
   const navigate = useNavigate();
@@ -22,20 +38,14 @@ export default function RegisterPage() {
     setLoading(true); setError(''); setSuccess('');
     
     try {
-      // (register ya tiene el signOut, no hace falta hacer nada más)
       await register(email, password, nombre, apellidos);
-      
       setSuccess('¡Registro completado! Serás redirigido a la página de acceso en 3 segundos...');
-      
-      // --- ESTO CUMPLE EL REQUISITO 1 ---
-      // Muestra mensaje de éxito y redirige a /login
       setTimeout(() => {
         navigate('/login');
       }, 3000);
-      // --- FIN ---
 
     } catch (err) {
-      setError(err.message);
+      setError(getAuthErrorES(err.code));
       setLoading(false);
     }
   };
@@ -55,7 +65,9 @@ export default function RegisterPage() {
               <button className="btn" type="submit" disabled={loading}>Registrarme</button>
             </div>
             
-            {error && <p className="muted" style={{ color: 'red', marginTop: '.5rem' }}>{error}</p>}
+            {/* --- ESTA LÍNEA MUESTRA EL ERROR EN ROJO --- */}
+            {error && <p className="muted" style={{ color: 'var(--error)', marginTop: '.5rem' }}>{error}</p>}
+            
             {success && <p className="muted" style={{ color: 'green', marginTop: '.5rem' }}>{success}</p>}
             
             <p className="muted" style={{ marginTop: '1rem' }}>
@@ -65,7 +77,18 @@ export default function RegisterPage() {
         </div>
       </div>
       <div className="col">
-        {/* ... (columna de privacidad) ... */}
+        <div className="card">
+          <h2>Privacidad</h2>
+          <p className="muted">
+            Al registrarte, tus datos de perfil (nombre, email) y tus listas se guardarán
+            de forma segura en Firebase para permitir la sincronización entre dispositivos
+            y la colaboración en listas compartidas.
+            
+            {/* --- CORRECCIÓN AQUÍ --- */}
+            {/* Se ha cambiado </id> por </p> */}
+          </p>
+            {/* --- FIN CORRECCIÓN --- */}
+        </div>
       </div>
     </div>
   );
