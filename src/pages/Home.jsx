@@ -1,33 +1,39 @@
+import { useNavigate } from 'react-router-dom'; // Importamos 'useNavigate'
+
 export default function Home() {
+  const navigate = useNavigate(); // Inicializamos el hook
+
+  // Creamos una función para manejar el clic
+  const handleComenzarClick = () => {
+    navigate('/auth'); // Navega a la página de autenticación
+  };
+
   return (
-    <div className="card">
-      <h1>Mercart – Asistente inteligente de compra</h1>
-      <p>
-        Gestiona tu carrito dinámico, comparte listas y recibe sugerencias basadas en hábitos,
-        productos esenciales, complementarios y de temporada. Úsala sin registro (datos locales)
-        o inicia sesión para sincronizar en Firebase y colaborar en tiempo real.
+    // Contenedor centrado para la bienvenida
+    <div style={{ textAlign: 'center', maxWidth: '600px', margin: '4rem auto' }}>
+      
+      <h1 style={{ fontSize: '2.5rem', color: 'var(--primary)' }}>
+        Bienvenido a Mercart
+      </h1>
+      
+      <p className="text-secondary" style={{ fontSize: '1.25rem', marginTop: '1rem' }}>
+        Tu asistente inteligente de compra.
       </p>
-      <div className="row">
-        <div className="col">
-          <h3>Características</h3>
-          <ul>
-            <li>Carrito dinámico con edición en tiempo real</li>
-            <li>Sugerencias automáticas según hábitos y temporada</li>
-            <li>Listas compartidas con enlaces de invitación</li>
-            <li>Modo invitado local sin registro</li>
-            <li>Sección “Siempre compro” para listas recurrentes</li>
-          </ul>
-        </div>
-        <div className="col">
-          <h3>Cómo empezar</h3>
-          <ol>
-            <li>Entra en Carrito y añade productos</li>
-            <li>Activa sugerencias desde la barra lateral</li>
-            <li>Ve a Listas para crear y compartir</li>
-            <li>Usa Acceso para registrarte o entrar</li>
-          </ol>
-        </div>
-      </div>
+      
+      <p className="muted" style={{ marginTop: '1.5rem', marginBottom: '2.5rem' }}>
+        Gestiona tu carrito, comparte listas y recibe sugerencias. 
+        Inicia sesión para guardar tus datos en la nube o entra como invitado.
+      </p>
+
+      {/* Reemplazamos <Link> por <button> con el evento onClick */}
+      <button 
+        onClick={handleComenzarClick} 
+        className="btn" 
+        style={{ padding: '1rem 2rem', fontSize: '1.25rem' }}
+      >
+        Comenzar
+      </button>
+
     </div>
   );
 }
