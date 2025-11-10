@@ -1,5 +1,5 @@
 import { db } from './firebase.js';
-import { collection, addDoc, doc, getDoc, getDocs, onSnapshot, query, where, updateDoc, arrayUnion, setDoc } from 'firebase/firestore';
+import { collection, addDoc, doc, getDoc, getDocs, onSnapshot, query, where, updateDoc } from 'firebase/firestore';
 
 const listsCol = collection(db, 'lists');
 
@@ -9,7 +9,8 @@ export async function createList({ name, ownerId }) {
 }
 
 export async function ensureDefaultList(userId) {
-  const q = query(listsCol, where('ownerId', '==', userId));
+  // Leer listas donde el usuario ya es miembro (alineado con reglas)
+  const q = query(listsCol, where('memberIds', 'array-contains', userId));
   const snap = await getDocs(q);
   if (!snap.empty) return snap.docs[0].id;
   return await createList({ name: 'Mi lista', ownerId: userId });

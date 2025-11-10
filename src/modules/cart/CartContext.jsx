@@ -12,15 +12,18 @@ export function CartProvider({ children }) {
   const [currentListId, setCurrentListId] = useState(null);
 
   useEffect(() => {
+    let unsub;
     if (mode === 'online' && user) {
       (async () => {
         const listId = await ensureDefaultList(user.uid);
         setCurrentListId(listId);
-        return subscribeToList(listId, setOnlineItems);
+        unsub = subscribeToList(listId, setOnlineItems);
       })();
     } else {
       setCurrentListId(null);
+      setOnlineItems([]);
     }
+    return () => { if (unsub) unsub(); };
   }, [user, mode]);
 
   const items = mode === 'online' ? onlineItems : localItems;
