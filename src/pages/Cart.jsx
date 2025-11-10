@@ -5,7 +5,6 @@ import { useSuggestions } from '../services/suggestions.js';
 import { trackPurchase } from '../services/suggestions.js'; // 2. IMPORTAR trackPurchase
 import { getAllProducts } from '../services/product.js';
 import { createNewList } from '../services/list.js';
-import { useAuth } from '../modules/auth/AuthContext.jsx';
 
 export default function CartPage() {
   const { items, addItem, removeItem, toggleItem, clearCart } = useCart();
