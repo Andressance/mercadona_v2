@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState } from 'react';
-import { app, auth } from '../../services/firebase.js';
+import { app, auth, db } from '../../services/firebase.js'; // Importa 'db'
 import { onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut } from 'firebase/auth';
+import { doc, setDoc } from 'firebase/firestore'; // Importa 'doc' y 'setDoc'
 
 const AuthCtx = createContext(null);
 
@@ -22,11 +23,32 @@ export function AuthProvider({ children }) {
     setMode('online');
   };
 
-  const register = async (email, password) => {
+  // --- MODIFICADO ---
+  // Ahora acepta nombre y apellidos
+  const register = async (email, password, nombre, apellidos) => {
+    // 1. Crea el usuario en Authentication
     const res = await createUserWithEmailAndPassword(auth, email, password);
-    setUser(res.user);
+    const user = res.user;
+
+    // 2. Guarda los datos extra en Firestore
+    try {
+      await setDoc(doc(db, 'users', user.uid), {
+        uid: user.uid,
+        email: user.email,
+        nombre,
+        apellidos,
+      });
+    } catch (e) {
+      // Opcional: manejar el error si Firestore falla
+      console.error("Error al guardar datos de usuario en Firestore:", e);
+      // Podrías decidir si revertir el registro o solo loggear el error
+    }
+
+    // 3. Actualiza el estado local
+    setUser(user);
     setMode('online');
   };
+  // --- FIN MODIFICADO ---
 
   const logout = async () => {
     await signOut(auth);
