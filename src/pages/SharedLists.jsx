@@ -38,6 +38,16 @@ export default function SharedListsPage() {
     alert('Enlace copiado: ' + url);
   };
 
+  const showCart = () => {
+    const url = `${window.location.origin}/carrito`;
+    navigator.clipboard.writeText(url);
+    window.location.href = url
+  }
+
+  const createPdf = () => {
+    
+  }
+
   return (
     <div className="card">
       <h2>Listas compartidas</h2>
@@ -50,7 +60,9 @@ export default function SharedListsPage() {
           <li key={l.id}>
             <span>{l.name}</span>
             <span className="badge">miembros: {l.memberIds?.length || 1}</span>
+            <button className="btn secondary" onClick={() => showCart()}>Mostrar Carrito</button>
             <button className="btn secondary" onClick={() => copyLink(l.id)}>Copiar enlace</button>
+            <button className="btn secondary" onClick={() => createPdf()}> Descargar lista</button>
           </li>
         ))}
       </ul>
