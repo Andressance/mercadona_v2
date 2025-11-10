@@ -1,36 +1,41 @@
 import { useState, useEffect} from 'react';
 import { useCart } from '../modules/cart/CartContext.jsx';
 import { useAuth } from '../modules/auth/AuthContext.jsx'; 
-// AHORA IMPORTAMOS LA VERSIÓN ASYNC DE 'getAlwaysList'
 import { useSuggestions, trackPurchase, getAlwaysList } from '../services/suggestions.js'; 
 import { getAllProducts } from '../services/product.js';
-// (Quitamos las importaciones de 'list.js' que daban problemas,
-//  ya que el botón 'Guardar lista' ya estaba en el código base anterior)
-import { createNewList, getUserUidFromFirestore, generatePdf } from '../services/list.js';
+// --- IMPORTACIONES MODIFICADAS ---
+// Importamos las funciones de 'firestore.js', no del antiguo 'list.js'
+import { 
+  createList, 
+  getListsForUser, 
+  addCartItemsToList 
+} from '../services/firestore.js';
+// (Ya no necesitamos 'list.js')
+// --- FIN IMPORTACIONES ---
 
 export default function CartPage() {
-  const { items, addItem, removeItem, toggleItem, clearCart } = useCart();
-  const { user, mode } = useAuth(); // Obtenemos 'user' y 'mode'
+  const { items, addItem, removeItem, toggleItem, clearCart, currentListId } = useCart(); // Traemos el currentListId
+  const { user, mode } = useAuth(); 
   const [name, setName] = useState('');
   const [qty, setQty] = useState(1);
   const [allProducts, setAllProducts] = useState([]);
   const [matches, setMatches] = useState([]);
-  
-  // --- LÓGICA "SIEMPRE COMPRO" MOVIDA A FIRESTORE ---
   const [alwaysList, setAlwaysList] = useState([]);
+
+  // --- NUEVO ESTADO PARA EL MODAL ---
+  const [showListModal, setShowListModal] = useState(false);
+  const [userLists, setUserLists] = useState([]);
+  // --- FIN NUEVO ESTADO ---
   
-  // 1. Cargamos la lista "Siempre compro" del usuario logueado
   useEffect(() => {
     if (mode === 'online' && user) {
       getAlwaysList(user.uid).then(setAlwaysList);
     } else {
-      setAlwaysList([]); // Vacía si es invitado
+      setAlwaysList([]); 
     }
-  }, [mode, user, items]); // 'items' para que recargue si simulamos compra
+  }, [mode, user, items]); 
 
-  // 2. Pasamos la lista cargada al hook de sugerencias
   const suggestions = useSuggestions(items, alwaysList);
-  // --- FIN DE LA LÓGICA ---
 
   useEffect(() => {
     getAllProducts().then(res => {
@@ -39,6 +44,7 @@ export default function CartPage() {
     });
   }, []);
 
+  // ... (onChangeName, onSelectMatch, onAdd no cambian) ...
    const onChangeName = (e) => {
     const value = e.target.value;
     setName(value);
@@ -67,44 +73,73 @@ export default function CartPage() {
     setName(''); setQty(1); setMatches([]);
   };
 
-  // 3. FUNCIÓN "SIMULAR COMPRA" AHORA ES ASYNC Y ONLINE
   const onSimulatePurchase = async () => {
-    // Solo aprende si está ONLINE
-    if (mode === 'online' && user && items.length > 0) {
-      await trackPurchase(user.uid, items); // Primero aprende (en Firestore)
+    if (mode !== 'online' || !user) {
+      alert('Debes iniciar sesión para usar la función de "Siempre Compro".');
+      return;
     }
-    clearCart(); // Luego vacía el carrito
+    if (items.length > 0) {
+      await trackPurchase(user.uid, items); 
+    }
+    clearCart(); 
   };
 
-  // (Mantenemos la lógica de 'Guardar Lista' que ya tenías)
+  // --- "GUARDAR LISTA" CORREGIDO ---
+  // Ahora crea una NUEVA LISTA VACÍA, como en SharedLists.jsx
   const saveCurrentCartAsList = async () => {
-  if (!user || !user.uid) {
-    alert("Debes iniciar sesión para guardar la lista");
-    return;
-  }
+    if (!user || !user.uid) {
+      alert("Debes iniciar sesión para guardar la lista");
+      return;
+    }
+    
+    const name = prompt("Nombre para tu NUEVA lista vacía:");
+    if (!name) return; // Si el usuario cancela
 
-  let ownerUid;
-  try {
-    ownerUid = await getUserUidFromFirestore(user.uid);
-  } catch (err) {
-    console.error(err);
-    alert("No se pudo obtener el UID del usuario");
-    return;
-  }
+    try {
+      // Llama a createList de firestore.js, que crea una lista con items: []
+      const listId = await createList({ name, ownerId: user.uid });
+      alert(`¡Nueva lista vacía "${name}" creada!\nYa puedes verla en "Listas compartidas".`);
+      // Ya no genera un PDF de una lista vacía
+    } catch (err) {
+      console.error(err);
+      alert("Error al crear la lista");
+    }
+  };
+  
+  // --- NUEVAS FUNCIONES PARA EL MODAL ---
+  
+  // 1. Abre el modal y carga las listas del usuario
+  const handleOpenListModal = async () => {
+    if (mode !== 'online' || !user) {
+      alert("Debes iniciar sesión para añadir productos a una lista.");
+      return;
+    }
+    try {
+      const lists = await getListsForUser(user.uid);
+      // Filtramos la "lista/carrito principal" para no añadir items a ella misma
+      const sharedLists = lists.filter(l => l.id !== currentListId);
+      setUserLists(sharedLists);
+      setShowListModal(true);
+    } catch (e) {
+      console.error(e);
+      alert("Error al cargar tus listas.");
+    }
+  };
 
-  const products = items.map(it => ({ name: it.name, quantity: it.quantity }));
-
-  try {
-    const listId = await createNewList(ownerUid, products);
-    alert(`Lista creada con ID: ${listId}`);
-
-    // ✅ Genera PDF aquí mismo
-    generatePdf(products);
-  } catch (err) {
-    console.error(err);
-    alert("Error al crear la lista");
-  }
-};
+  // 2. Se llama al hacer clic en una lista del modal
+  const handleSelectList = async (list) => {
+    try {
+      // Llama a la nueva función de firestore
+      await addCartItemsToList(list.id, items);
+      alert(`¡Productos añadidos a la lista "${list.name}"!`);
+      setShowListModal(false);
+      clearCart(); // Vaciamos el carrito después de "guardar"
+    } catch (e) {
+      console.error(e);
+      alert("Error al añadir los productos.");
+    }
+  };
+  // --- FIN NUEVAS FUNCIONES ---
 
   return (
     <div className="row">
@@ -139,7 +174,6 @@ export default function CartPage() {
             
             <div style={{ display: 'flex', gap: '.5rem', flexWrap: 'wrap', marginTop: '0.5rem' }}>
               <button className="btn" type="submit">Añadir</button>
-              
               <button 
                 className="btn secondary" 
                 type="button" 
@@ -148,20 +182,15 @@ export default function CartPage() {
               >
                 Vaciar
               </button>
-
-              {/* --- 4. VISIBILIDAD DEL BOTÓN INVERTIDA --- */}
-              {/* Ahora solo se muestra en modo 'online' */}
-              {mode === 'online' && (
-                <button 
-                  className="btn accent" 
-                  type="button" 
-                  onClick={onSimulatePurchase}
-                  disabled={items.length === 0}
-                  style={{ marginLeft: 'auto' }} 
-                >
-                  Simular Compra
-                </button>
-              )}
+              <button 
+                className="btn accent" 
+                type="button" 
+                onClick={onSimulatePurchase}
+                disabled={items.length === 0}
+                style={{ marginLeft: 'auto' }} 
+              >
+                Simular Compra
+              </button>
             </div>
           </form>
 
@@ -176,18 +205,77 @@ export default function CartPage() {
             ))}
           </ul>
            
-           {/* Botón Guardar lista (se muestra si hay items y estás online) */}
-           {mode === 'online' && items.length > 0 && (
-            <button
-              className="btn" // (Le he quitado el 'primary' que no existe en tu CSS)
-              style={{ marginTop: '1rem' }}
-              onClick={saveCurrentCartAsList} 
-            >
-              Guardar lista
-            </button>
+           {/* --- BOTONES DE GUARDADO MODIFICADOS --- */}
+           {items.length > 0 && (
+            <div style={{ display: 'flex', gap: '0.5rem', marginTop: '1rem' }}>
+              {/* Este botón ahora crea una lista vacía */}
+              <button
+                className="btn" 
+                onClick={saveCurrentCartAsList} 
+              >
+                Crear nueva lista
+              </button>
+              
+              {/* Este es el NUEVO botón de tu funcionalidad */}
+              <button
+                className="btn" 
+                style={{ background: 'var(--accent)', color: 'white' }}
+                onClick={handleOpenListModal}
+              >
+                Añadir a lista...
+              </button>
+            </div>
            )}
         </div>
       </div>
+      
+      {/* --- MODAL PARA SELECCIONAR LISTA (AÑADIDO) --- */}
+      {showListModal && (
+        // Fondo del modal
+        <div style={{
+          position: 'fixed', top: 0, left: 0, width: '100%', height: '100%',
+          background: 'rgba(0, 0, 0, 0.5)', display: 'flex',
+          alignItems: 'center', justifyContent: 'center', zIndex: 100
+        }}
+        onClick={() => setShowListModal(false)} // Cierra al hacer clic fuera
+        >
+          {/* Contenido del modal */}
+          <div className="card" 
+               style={{ minWidth: '300px', maxWidth: '500px' }}
+               onClick={(e) => e.stopPropagation()} // Evita que se cierre al hacer clic dentro
+          >
+            <h3>Añadir a una lista existente</h3>
+            <p className="muted">Los productos del carrito se añadirán y sus cantidades se sumarán a la lista que selecciones.</p>
+            
+            {userLists.length > 0 ? (
+              <ul className="list" style={{ marginTop: '1rem' }}>
+                {userLists.map(list => (
+                  <li key={list.id} 
+                      style={{ justifyContent: 'flex-start', cursor: 'pointer' }}
+                      onClick={() => handleSelectList(list)}
+                  >
+                    <span>{list.name}</span>
+                    <span className="badge" style={{ marginLeft: 'auto' }}>
+                      {list.items?.length || 0} productos
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="muted" style={{ marginTop: '1rem' }}>No tienes otras listas compartidas. Puedes crear una desde la pestaña "Listas".</p>
+            )}
+
+            <button 
+              className="btn secondary" 
+              style={{ marginTop: '1rem' }}
+              onClick={() => setShowListModal(false)}
+            >
+              Cancelar
+            </button>
+          </div>
+        </div>
+      )}
+      {/* --- FIN DEL MODAL --- */}
     </div>
   );
 }

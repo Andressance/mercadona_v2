@@ -29,36 +29,30 @@ export function subscribeToList(listId, cb) {
   });
 }
 
-// --- FUNCIÓN addListItem MODIFICADA ---
 export async function addListItem(listId, { name, quantity }) {
   const ref = doc(db, 'lists', listId);
   const snap = await getDoc(ref);
   const data = snap.data();
   const items = data?.items || [];
-  const normalizedName = name.toLowerCase(); // Normalizamos
+  const normalizedName = name.toLowerCase(); 
 
   let itemFound = false;
 
-  // 1. Mapear para encontrar y actualizar
   const updatedItems = items.map(it => {
     if (it.name.toLowerCase() === normalizedName) {
       itemFound = true;
-      // Si se encuentra, suma la cantidad
       return { ...it, quantity: it.quantity + quantity };
     }
     return it;
   });
 
-  // 2. Si no se encontró, añadirlo nuevo
   if (!itemFound) {
     const id = crypto.randomUUID();
     updatedItems.push({ id, name, quantity, checked: false });
   }
 
-  // 3. Subir la lista actualizada a Firestore
   await updateDoc(ref, { items: updatedItems });
 }
-// --- FIN DE LA MODIFICACIÓN ---
 
 export async function removeListItem(listId, id) {
   const ref = doc(db, 'lists', listId);
@@ -85,4 +79,50 @@ export async function joinListById(listId, userId) {
   if (!memberIds.includes(userId)) {
     await updateDoc(ref, { memberIds: [...memberIds, userId] });
   }
+}
+
+// --- NUEVA FUNCIÓN ---
+/**
+ * Añade un array de productos (carrito) a una lista existente,
+ * fusionando cantidades si los productos ya existen.
+ * @param {string} listId - ID de la lista de destino.
+ * @param {Array} cartItems - Array de productos del carrito.
+ */
+export async function addCartItemsToList(listId, cartItems) {
+  const ref = doc(db, 'lists', listId);
+  const snap = await getDoc(ref);
+  if (!snap.exists()) throw new Error("La lista no existe");
+
+  const data = snap.data();
+  const existingItems = data?.items || [];
+
+  // Usamos un Map para la eficiencia al fusionar
+  // Clave: nombre normalizado, Valor: objeto item
+  const itemsMap = new Map(existingItems.map(it => [it.name.toLowerCase(), it]));
+
+  // Recorremos los productos del carrito
+  for (const cartItem of cartItems) {
+    const normalizedName = cartItem.name.toLowerCase();
+    
+    if (itemsMap.has(normalizedName)) {
+      // Si existe, actualiza la cantidad
+      const existing = itemsMap.get(normalizedName);
+      existing.quantity += cartItem.quantity;
+    } else {
+      // Si no existe, crea un nuevo objeto item y añádelo al Map
+      const newItem = {
+        id: crypto.randomUUID(),
+        name: cartItem.name,
+        quantity: cartItem.quantity,
+        checked: false
+      };
+      itemsMap.set(normalizedName, newItem);
+    }
+  }
+
+  // Convertimos el Map de nuevo a un array
+  const updatedItems = Array.from(itemsMap.values());
+
+  // Actualizamos el documento de Firestore una sola vez
+  await updateDoc(ref, { items: updatedItems });
 }
